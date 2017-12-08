@@ -4,7 +4,7 @@ clear;
 s = 1.25; % [m], maximum rope pull length
 t = 1;   % [s], ideally the time we should be able to output that in
 
-% Assuming zero dampening. 
+% Assuming zero resistance
 t_accel = t / 2;
 t_deccel = t / 2;
 
@@ -17,7 +17,7 @@ accel_lin = v_max / t_accel;
 
 
 % System caracteristics
-total_inertia = 0.1463;
+total_inertia = 0.1463; % Update this of course
 r_min = 0.15; 
 accel_ang = accel_lin / r_min;
 
