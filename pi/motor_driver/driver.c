@@ -24,14 +24,17 @@ int main(int argc, char *argv[])
   // Configure pins to output  
   gpioSetMode(DIR_PIN,  PI_OUTPUT);
   gpioSetMode(PWM_PIN, PI_OUTPUT);
-  
+ 
+  // Turn on forward direction
+  gpioWrite(DIR_PIN, 1);
+
   // Not necessarily the real freq because of sample rate considerations
   int real_freq_hz = gpioSetPWMfrequency(PWM_PIN, PWM_FREQ_HZ);
   printf("Real freq: %d\n", real_freq_hz);
   gpioSetPWMrange(PWM_PIN, PWM_RANGE);
   unsigned int half_on = PWM_RANGE / 2;
   int set_pwm = gpioPWM(PWM_PIN, half_on);
-  printf("Set pwm?: %d", set_pwm);
+  printf("Set pwm?: %d\n", set_pwm);
 
   sleep(1000);
   end = time_time();
