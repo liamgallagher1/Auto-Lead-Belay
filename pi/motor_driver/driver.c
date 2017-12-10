@@ -22,6 +22,9 @@ gcc -Wall -pthread -o motor_driver driver.c -lpigpio
 // frequency of PWM output in HZ
 #define PWM_FREQ_HZ 8000
 
+#define PULSES_PER_SECOND 2048
+#define PI 3.14159
+
 void callback(int dir)
 {
   static int pos_tics = 0;
@@ -46,7 +49,8 @@ void callback(int dir)
   alpha_tss = (curr_omega_ts - omega_ts) / dt_s;
   omega_ts = curr_omega_ts;
 
-  printf("pos_t: %d \tomega_ts: %f \talpha_tss: %f \t dt_s: %f \n", pos_tics, omega_ts, alpha_tss, dt_s);
+  //printf("pos_t: %d \tomega_ts: %f \talpha_tss: %f \t dt_s: %f \n", pos_tics, omega_ts, alpha_tss, dt_s);
+  printf("pos_t: %d \tomega_rs: %f \talpha_rss: %f \t dt_s: %f \n", pos_tics, 2 * PI * omega_ts / PULSES_PER_SECOND, 2 * PI * alpha_tss / PULSES_PER_SECOND, dt_s);
 }
 
 int main(int argc, char *argv[])
