@@ -79,6 +79,7 @@ Pi_Renc_t * Pi_Renc(int gpioA, int gpioB, Pi_Renc_CB_t callback)
 
    gpioSetAlertFuncEx(gpioA, _cb, renc);
    gpioSetAlertFuncEx(gpioB, _cb, renc);
+   return renc;
 }
 
 void Pi_Renc_cancel(Pi_Renc_t *renc)
