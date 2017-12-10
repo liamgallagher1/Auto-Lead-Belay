@@ -24,10 +24,29 @@ gcc -Wall -pthread -o motor_driver driver.c -lpigpio
 
 void callback(int dir)
 {
-  static int pos = 0;
+  static int pos_tics = 0;
+  static float omega_ts = 0; // tics per second
+  static float alpha_tss = 0; // tics per second per second
+  static float prev_time_s = 0;
+  static int time_s = 0;
+  static int time_us = 0;
+
+  gpioTime(PI_TIME_RELATIVE, &time_s, &time_us);
+  
+  float curr_time_s = time_s + time_us / 1000000.0; // dt can be found better than this
+  float dt_s = curr_time_s - prev_time_s;
+  prev_time_s = curr_time_s;
+
+  // TODO get rid of floats, lowpass filter, should I even use interupts? 
+  
   // Increment the angular position on each encoder tic
-  pos += dir;
-  printf("pos=%d\n", pos);
+  pos_tics += dir;
+  
+  float curr_omega_ts = dir / dt_s;
+  alpha_tss = (curr_omega_ts - omega_ts) / dt_s;
+  omega_ts = curr_omega_ts;
+
+  printf("pos_t: %d \tomega_ts: %f \talpha_tss: %f \t dt_s: %f \n", pos_tics, omega_ts, alpha_tss, dt_s);
 }
 
 int main(int argc, char *argv[])
