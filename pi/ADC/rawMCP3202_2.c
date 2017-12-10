@@ -28,15 +28,19 @@ a unique MISO line.
 
 #include <pigpio.h>
 
-#define SPI_SS 22 // GPIO for slave select.
+#define SPI_SS 18 // GPIO for slave select.
 
-#define ADCS 1    // Number of connected MCP3202.
+#define ADCS 5    // Number of connected MCP3202.
 
 #define BITS 12            // Bits per reading.
 #define BX 6               // Bit position of data bit B11.
 #define B0 (BX + BITS - 1) // Bit position of data bit B0.
 
 #define MISO1 17   // ADC 1 MISO.
+#define MISO2 26  //     2
+#define MISO3 13  //     3
+#define MISO4 23  //     4
+#define MISO5 24  //     5
 
 #define BUFFER 250       // Generally make this buffer as large as possible.
 
@@ -44,11 +48,11 @@ a unique MISO line.
 
 #define SAMPLES 2000000  // Number of samples to take,
 
-int MISO[ADCS]={MISO};
+int MISO[ADCS]={MISO1, MISO2, MISO3, MISO4, MISO5};
 
 rawSPI_t rawSPI =
 {
-   .clk     =  18, // GPIO for SPI clock.
+   .clk     = 22, // GPIO for SPI clock.
    .mosi    = 27, // GPIO for SPI MOSI.
    .ss_pol  =  1, // Slave select resting level.
    .ss_us   =  1, // Wait 1 micro after asserting slave select.
