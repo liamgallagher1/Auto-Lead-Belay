@@ -27,13 +27,15 @@ gcc -Wall -pthread -o motor_driver driver.c -lpigpio
 #define PULSES_PER_REVOLUTION 2048
 #define RUN_FOR_TIME_SEC 10
 
+// defines frequency of printout
+#define PRINT_FREQ_HZ 5.0
+
 // Assuming quadrature encoder
 static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
 
 // Simple low pass filter parameters for estimating velocity and acceleration
 static double vel_alpha = 0.05;
 static double accel_alpha = 0.3;
-
 
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
@@ -81,8 +83,9 @@ int main(int argc, char *argv[])
   int set_pwm = gpioPWM(PWM_PIN, half_on);
   printf("Set pwm?: %d\n", set_pwm);
 
-  long loop_wait_time_nsec = (long) round(1.0 / SAMPLING_FREQ_HZ);
-  double loop_wait_time_sec = loop_wait_time_nsec / (double) 1E9;
+  double loop_wait_time_sec = round(1.0 / SAMPLING_FREQ_HZ);
+  long loop_wait_time_nsec = (long) (loop_wait_time_sec * 1E9);
+  long print_loop_freq = (long) round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec));
 
   printf("Actual sampling freq: %f\n", 1.0 /loop_wait_time_nsec);
 
@@ -107,7 +110,10 @@ int main(int argc, char *argv[])
   double prev_motor_omega_rs = 0;
   double prev_motor_alpha_rss = 0;
 
+  long num_iters = 0;
+
   // Sampling loop, do for ten seconds
+  // TODO consider single precision floats to save time?
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
     // Calculate the motor step size and "velocity" and "acceleration" since the last sample
     double motor_step_rad = (main_motor_count - prev_motor_count) * M_2_PI / COUNTS_PER_REVOLUTION;
@@ -116,8 +122,15 @@ int main(int argc, char *argv[])
 
     // Update the previous values using simple lowpass filters
     // TODO use second or third order filters here, justifying need for circular buffers
-    prev_motor_omega_rs = 0.0;  
-     
+    prev_motor_rad = prev_motor_count * M_2_PI / COUNTS_PER_REVOLUTION;
+    prev_motor_omega_rs = vel_alpha * motor_omega_instant_rs + (1.0 - vel_alpha) * prev_motor_omega_rs;
+    prev_motor_alpha_rss = accel_alpha * motor_alpha_instant_rss + (1.0 - accel_alpha) * prev_motor_alpha_rss;
+
+
+    num_iters++;
+    if (!(num_iters % print_loop_freq)) {
+      printf("Motor pos: %f\t vel: %f \t accel: %f\n", prev_motor_rad, prev_motor_omega_rs, prev_motor_alpha_rss);
+    }
 
     // Wait till the time for this loop expires
     // TODO add automatic check that the sampling time isn't too fast

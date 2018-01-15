@@ -1,5 +1,5 @@
 TARGET = sampling_driver driver
-LIBS = -lpthread -lpigpio
+LIBS = -lpthread -lpigpio -lm
 CC = gcc
 CFLAGS =  -Wall -pthread
 
