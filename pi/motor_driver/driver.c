@@ -1,7 +1,6 @@
 /*
 gcc -Wall -pthread -o motor_driver driver.c -lpigpio
 */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

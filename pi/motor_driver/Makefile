@@ -1,24 +1,29 @@
-TARGET = driver
+TARGET = sampling_driver driver
 LIBS = -lpthread -lpigpio
 CC = gcc
-CFLAGS = -g -Wall -pthread
+CFLAGS =  -Wall -pthread
 
 .PHONY: default all clean
 
-default: $(TARGET)
-	all: default
+HEADERS = rotary_encoder.h 
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c))
-HEADERS = $(wildcard *.h)
+default: sampling_driver
 
-%.o: %.c $(HEADERS)
-	    $(CC) $(CFLAGS) -c $< -o $@
+driver: driver.o rotary_encoder.o
+		gcc $(CFLAGS) -o driver driver.o rotary_encoder.o $(LIBS) 
 
-.PRECIOUS: $(TARGET) $(OBJECTS)
+sampling_driver: sampling_driver.o rotary_encoder.o
+		gcc $(CFLAGS) -o sampling_driver sampling_driver.o rotary_encoder.o $(LIBS)
 
-$(TARGET): $(OBJECTS)
-	    $(CC) $(OBJECTS) -Wall -pthread $(LIBS) -o $@
+rotary_encoder.o: rotary_encoder.c rotary_encoder.h
+	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)
+
+driver.o: driver.c rotary_encoder.h 
+		gcc $(CFLAGS) -c driver.c $(LIBS)
+
+sampling_driver.o: sampling_driver.c rotary_encoder.h
+		gcc $(CFLAGS) -c sampling_driver.c $(LIBS)
 
 clean:
-	    -rm -f *.o
-			    -rm -f $(TARGET)
+		-rm -f *.o
+		-rm -f $(TARGET)
