@@ -22,7 +22,7 @@ sudo ./rot_enc_c
 
 */
 
-void callback(int way)
+void count_callback(int way)
 {
    static int pos = 0;
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
    if (gpioInitialise() < 0) return 1;
    printf("succsessful init\n");
 
-   renc = Pi_Renc(27, 22, callback);
+   renc = Pi_Renc(27, 22, count_callback);
 
    printf("PI _RENC\n");
    sleep(300);
