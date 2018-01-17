@@ -117,7 +117,6 @@ surf(thickness, radii, max_powers(:, :, 1));
 ylabel('Radii [m]');
 xlabel('Thickness [m]');
 zlabel('Max Power Required [W]');
-
 figure;
 
 subplot(2, 1, 1);
