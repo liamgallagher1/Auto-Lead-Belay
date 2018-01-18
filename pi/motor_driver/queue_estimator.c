@@ -1,6 +1,3 @@
-/*
-gcc -Wall -pthread -o motor_driver driver.c -lpigpio
-*/
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +30,9 @@ gcc -Wall -pthread -o motor_driver driver.c -lpigpio
 // Assuming quadrature encoder
 static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
 
+// How many radians does each tic correspond to?
+static double RADS_PER_COUNT = M_2_PI / (PULSES_PER_REVOLUTION * 4);
+
 // Simple low pass filter parameters for estimating velocity and acceleration
 static double vel_alpha = 0.05;
 static double accel_alpha = 0.3;
@@ -40,8 +40,6 @@ static double accel_alpha = 0.3;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
 
-// How many radians does each tic correspond to?
-static double rads_per_tic = M_2_PI / (PULSES_PER_REVOLUTION * 4);
 
 // Now only use the callback to modify the main motor count
 void callback(int dir)
@@ -101,7 +99,8 @@ int main(int argc, char *argv[])
   struct timespec curr_time;
   clock_gettime(CLOCK_REALTIME, &start_time);
   clock_gettime(CLOCK_REALTIME, &curr_loop_time);
-  
+ 
+  // TODO remove this if using the circular buffer?
   // Motor count on the previous loop
   long prev_motor_count = main_motor_count;
   // Motor sate in rads, rads per sec, rads per sec per sec
@@ -112,21 +111,42 @@ int main(int argc, char *argv[])
 
   long num_iters = 0;
 
-  Queue* prev_5_counts = createQueue(5);
+  // Initalize circular buffer of previous encoding measurements estimates
+  Queue* prev_2_meas = createQueue(2);
+  Queue* prev_2_est = createQueue(2);
+  for (unsigned int i = 0; i < 2; ++i) {
+    enqueue(prev_2_meas, prev_motor_rad);
+    enqueue(prev_2_ests, prev_motor_rad);
+  }
+  
+  // Filter constants
+  // Motor position estimate comes from second order low pass filter
+  // which uses the previous measurements and estimates, internally
+  float curr_mes_p = 0.947923447467778;
+  float prev_mes_1_p =  0.021091003775550; 
+  float prev_mes_2_p = -0.926832443692228;
+
+  float prev_est_1_p = 0.083062101288895;
+  float prev_est_2_p = 0.874755891160005;
 
   // Sampling loop, do for ten seconds
   // TODO consider single precision floats to save time?
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
-    // Calculate the motor step size and "velocity" and "acceleration" since the last sample
-    double motor_step_rad = (main_motor_count - prev_motor_count) * M_2_PI / COUNTS_PER_REVOLUTION;
-    double motor_omega_instant_rs = motor_step_rad / loop_wait_time_sec;
-    double motor_alpha_instant_rss = (motor_omega_instant_rs - prev_motor_omega_rs) / loop_wait_time_sec;
+    // Estimate the motor position using a second order lowpass filter
+    float curr_encoder_measure_rad = main_motor_count * RADS_FOR_COUNT;
+
+    float curr_encoder_est_rad = curr_meas_p * curr_encoder_measure_rad +
+      prev_mes_0_p * at(prev_2_meas, 0) + prev_mes_1_p * at(prev_2_meas, 1) +
+      prev_est_0_p * at(prev_2_ests, 0) + prev_est_1_p * at(prev_2_ests, 1);
 
     // Update the previous values using simple lowpass filters
     // TODO use second or third order filters here, justifying need for circular buffers
     prev_motor_rad = prev_motor_count * M_2_PI / COUNTS_PER_REVOLUTION;
     prev_motor_omega_rs = vel_alpha * motor_omega_instant_rs + (1.0 - vel_alpha) * prev_motor_omega_rs;
     prev_motor_alpha_rss = accel_alpha * motor_alpha_instant_rss + (1.0 - accel_alpha) * prev_motor_alpha_rss;
+
+    enqueue(prev_2_measures, prev_motor_rad);
+    enqueue(prev_2_ests, curr_motor_est_rad);
 
     num_iters++;
     if (!(num_iters % print_loop_freq)) {

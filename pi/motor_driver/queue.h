@@ -20,7 +20,7 @@
  * The type of element that we are storing in the
  * queue
  */
-typedef int Element;
+typedef float Element;
 
 /**
  * Queue Structure
