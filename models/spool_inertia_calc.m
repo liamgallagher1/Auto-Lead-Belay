@@ -49,7 +49,7 @@ m_pipe = pi * rho * l * (r2^2 - r1^2);
 
 J_spool = rope_inertia + J_pipe;
 m_spool = m_pipe + rope_mass;
-disp(num_stacks)
+%disp(num_stacks)
 
 end
 
