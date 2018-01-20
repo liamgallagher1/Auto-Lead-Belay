@@ -27,15 +27,21 @@
 // defines frequency of printout
 #define PRINT_FREQ_HZ 5.0
 
+// Order of the estimator
+#define VEL_ESTIMATOR_ORDER 6
+
+// Velocity filter parameters, numerator and denomenator terms of IIR filter
+// implicit a_1 = 1.0 filter term included unecessarily 
+static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+         0.020396475318968,  -0.058825123415598,   0.089540672078545,  -0.089540672078545,   0.058825123415598, -0.020396475318968};
+static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+         1.0, -3.696756079437830, 4.983060887903212, -2.753504247774058, 0.345531791427655, 0.121682695559447};
+
 // Assuming quadrature encoder
 static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
 
 // How many radians does each tic correspond to?
 static double RADS_PER_COUNT = M_2_PI / (PULSES_PER_REVOLUTION * 4);
-
-// Simple low pass filter parameters for estimating velocity and acceleration
-static double vel_alpha = 0.05;
-static double accel_alpha = 0.3;
 
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
@@ -100,57 +106,44 @@ int main(int argc, char *argv[])
   clock_gettime(CLOCK_REALTIME, &start_time);
   clock_gettime(CLOCK_REALTIME, &curr_loop_time);
  
-  // TODO remove this if using the circular buffer?
-  // Motor count on the previous loop
-  long prev_motor_count = main_motor_count;
-  // Motor sate in rads, rads per sec, rads per sec per sec
-  double prev_motor_rad = prev_motor_count * M_2_PI / COUNTS_PER_REVOLUTION; 
-  // Init to zero.   
-  double prev_motor_omega_rs = 0;
-  double prev_motor_alpha_rss = 0;
-
   long num_iters = 0;
 
   // Initalize circular buffer of previous encoding measurements estimates
-  Queue* prev_2_meas = createQueue(2);
-  Queue* prev_2_est = createQueue(2);
-  for (unsigned int i = 0; i < 2; ++i) {
-    enqueue(prev_2_meas, prev_motor_rad);
-    enqueue(prev_2_ests, prev_motor_rad);
+  Queue* prev_vel_ests_rs = createQueue(VEL_ESTIMATOR_ORDER);
+  Queue* prev_pos_obs_rad = createQueue(VEL_ESTIMATOR_ORDER);
+  float motor_pos_rad = main_motor_count * RADS_PER_COUNT;
+  for (unsigned int i = 0; i < VEL_ESTIMATOR_ORDER; ++i) {
+    enqueue(prev_vel_ests_rs, 0.0);
+    enqueue(prev_pos_obs_rad, motor_pos_rad);
   }
-  
-  // Filter constants
-  // Motor position estimate comes from second order low pass filter
-  // which uses the previous measurements and estimates, internally
-  float curr_mes_p = 0.947923447467778;
-  float prev_mes_1_p =  0.021091003775550; 
-  float prev_mes_2_p = -0.926832443692228;
-
-  float prev_est_1_p = 0.083062101288895;
-  float prev_est_2_p = 0.874755891160005;
 
   // Sampling loop, do for ten seconds
-  // TODO consider single precision floats to save time?
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
-    // Estimate the motor position using a second order lowpass filter
-    float curr_encoder_measure_rad = main_motor_count * RADS_FOR_COUNT;
+    // Get the current motor position in radians
+    motor_pos_rad = main_motor_count * RADS_PER_COUNT;
+   
+    // TODO occasional numerical conditioning considerations by keeping 
+    // motor position small
+    
+    // Do IIR filter calculatorions
+    float vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
+    for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
+      vel_est_rs += vel_estimator_b[i] * at(prev_vel_ests_rs, i - 1);
+      vel_est_rs -= vel_estimator_a[i] * at(prev_pos_obs_rad, i - 1);
+    }
+    
+    // Cycle circular queues 
+    dequeue(prev_vel_ests_rs);
+    enqueue(prev_vel_ests_rs, vel_est_rs);
 
-    float curr_encoder_est_rad = curr_meas_p * curr_encoder_measure_rad +
-      prev_mes_0_p * at(prev_2_meas, 0) + prev_mes_1_p * at(prev_2_meas, 1) +
-      prev_est_0_p * at(prev_2_ests, 0) + prev_est_1_p * at(prev_2_ests, 1);
-
-    // Update the previous values using simple lowpass filters
-    // TODO use second or third order filters here, justifying need for circular buffers
-    prev_motor_rad = prev_motor_count * M_2_PI / COUNTS_PER_REVOLUTION;
-    prev_motor_omega_rs = vel_alpha * motor_omega_instant_rs + (1.0 - vel_alpha) * prev_motor_omega_rs;
-    prev_motor_alpha_rss = accel_alpha * motor_alpha_instant_rss + (1.0 - accel_alpha) * prev_motor_alpha_rss;
-
-    enqueue(prev_2_measures, prev_motor_rad);
-    enqueue(prev_2_ests, curr_motor_est_rad);
+    dequeue(prev_pos_obs_rad);
+    enqueue(prev_pos_obs_rad, motor_pos_rad);
 
     num_iters++;
+    // Print if its time to do so
+    // TODO probably really screws up the timeing on these iterations
     if (!(num_iters % print_loop_freq)) {
-      printf("Motor pos: %f\t vel: %f \t accel: %f\n", prev_motor_rad, prev_motor_omega_rs, prev_motor_alpha_rss);
+      printf("Motor pos: %f\t vel: %f \t", motor_pos_rad, vel_est_rs);
     }
 
     // Wait till the time for this loop expires
