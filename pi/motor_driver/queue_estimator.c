@@ -20,12 +20,12 @@
 // ideal frequency of PWM output in HZ
 #define PWM_FREQ_HZ 8000
 // frequency the count is quieried
-#define SAMPLING_FREQ_HZ 500
+#define SAMPLING_FREQ_HZ 1000
 #define PULSES_PER_REVOLUTION 2048
 #define RUN_FOR_TIME_SEC 10
 
 // defines frequency of printout
-#define PRINT_FREQ_HZ 5.0
+#define PRINT_FREQ_HZ 5
 
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 6
@@ -55,6 +55,23 @@ void callback(int dir)
   } else {
     main_motor_count--;
   }
+}
+
+// Calculates the difference of two times
+// TODO put the function elsewhere
+void timespec_diff(
+    struct timespec *start, 
+    struct timespec *stop,
+    struct timespec *result)
+{
+  if ((stop->tv_nsec - start->tv_nsec) < 0) {
+    result->tv_sec = stop->tv_sec - start->tv_sec - 1;
+    result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
+  } else {
+    result->tv_sec = stop->tv_sec - start->tv_sec;
+    result->tv_nsec = stop->tv_nsec - start->tv_nsec;
+  }
+  return;
 }
 
 int main(int argc, char *argv[])
@@ -87,11 +104,12 @@ int main(int argc, char *argv[])
   int set_pwm = gpioPWM(PWM_PIN, half_on);
   printf("Set pwm?: %d\n", set_pwm);
 
-  double loop_wait_time_sec = round(1.0 / SAMPLING_FREQ_HZ);
-  long loop_wait_time_nsec = (long) (loop_wait_time_sec * 1E9);
-  long print_loop_freq = (long) round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec));
+  double loop_wait_time_sec = (1.0 / SAMPLING_FREQ_HZ);
+  long loop_wait_time_nsec = (long) round(loop_wait_time_sec * 1E9);
+  long print_loop_freq_iters = (long) round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec));
 
-  printf("Actual sampling freq: %f\n", 1.0 /loop_wait_time_nsec);
+  printf("Sampling freq HZ and NSEC: %i \t %li \n", SAMPLING_FREQ_HZ, loop_wait_time_nsec);
+  printf("Print freq HZ and num iters: %d \t %li \n", PRINT_FREQ_HZ, print_loop_freq_iters);
 
   // Chill for a second
   sleep(1);
@@ -102,20 +120,21 @@ int main(int argc, char *argv[])
   // Time that we started this loop,
   struct timespec curr_loop_time;
   // Current time, if we are waiting for the loops period to expire
-  struct timespec curr_time;
+  struct timespec curr_time, time_diff;
   clock_gettime(CLOCK_REALTIME, &start_time);
   clock_gettime(CLOCK_REALTIME, &curr_loop_time);
  
   long num_iters = 0;
 
   // Initalize circular buffer of previous encoding measurements estimates
-  Queue* prev_vel_ests_rs = createQueue(VEL_ESTIMATOR_ORDER);
-  Queue* prev_pos_obs_rad = createQueue(VEL_ESTIMATOR_ORDER);
+  Queue* prev_vel_ests_rs = createQueue(VEL_ESTIMATOR_ORDER + 1);
+  Queue* prev_pos_obs_rad = createQueue(VEL_ESTIMATOR_ORDER + 1);
   float motor_pos_rad = main_motor_count * RADS_PER_COUNT;
   for (unsigned int i = 0; i < VEL_ESTIMATOR_ORDER; ++i) {
     enqueue(prev_vel_ests_rs, 0.0);
     enqueue(prev_pos_obs_rad, motor_pos_rad);
   }
+  printf("Init both queues");
 
   // Sampling loop, do for ten seconds
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
@@ -142,15 +161,18 @@ int main(int argc, char *argv[])
     num_iters++;
     // Print if its time to do so
     // TODO probably really screws up the timeing on these iterations
-    if (!(num_iters % print_loop_freq)) {
-      printf("Motor pos: %f\t vel: %f \t", motor_pos_rad, vel_est_rs);
+    if ((num_iters % print_loop_freq_iters) == 0) {
+      printf("Motor pos: %f\t vel: %f %li \n", motor_pos_rad, vel_est_rs, num_iters);
     }
 
     // Wait till the time for this loop expires
     // TODO add automatic check that the sampling time isn't too fast
     do{
       clock_gettime(CLOCK_REALTIME, &curr_time);
-    } while(curr_time.tv_nsec - curr_loop_time.tv_nsec < loop_wait_time_nsec);
+      // Needs to do a slightly more difficult difference operation
+      timespec_diff(&curr_loop_time, &curr_time, &time_diff);
+    } while(time_diff.tv_nsec < loop_wait_time_nsec);
+    curr_loop_time = curr_time;
   }
 
   printf("Time: %li\n", start_time.tv_sec); 
