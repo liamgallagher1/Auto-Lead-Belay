@@ -21,7 +21,7 @@
 #define PWM_FREQ_HZ 8000
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 1000
-#define PULSES_PER_REVOLUTION 2048
+#define COUNTS_PER_REVOLUTION 2048
 #define RUN_FOR_TIME_SEC 10
 
 // defines frequency of printout
@@ -38,11 +38,11 @@ static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = {
          1.0, -3.696756079437830, 4.983060887903212, -2.753504247774058, 0.345531791427655, 0.121682695559447};
 
 // Assuming quadrature encoder
-static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
+// I GOT DUPED
+//static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
 
 // How many radians does each tic correspond to?
-static double RADS_PER_COUNT = M_2_PI / (PULSES_PER_REVOLUTION * 4);
-
+static double RADS_PER_COUNT = 2.0 * M_PI / COUNTS_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
 
@@ -93,16 +93,16 @@ int main(int argc, char *argv[])
 
   // The asked for frequency isn't necessarily the set one
   // because of sample rate considerations
-  int real_freq_hz = gpioSetPWMfrequency(PWM_PIN, PWM_FREQ_HZ);
-  printf("Real PWM Frequency: %d\n", real_freq_hz);
+  // int real_freq_hz = gpioSetPWMfrequency(PWM_PIN, PWM_FREQ_HZ);
+  // printf("Real PWM Frequency: %d\n", real_freq_hz);
 
   // Set range controlling fully on vs fully off behavior
-  gpioSetPWMrange(PWM_PIN, PWM_RANGE);
+  // gpioSetPWMrange(PWM_PIN, PWM_RANGE);
 
   // Set PWM output to 50% duty cycle
-  unsigned int half_on = PWM_RANGE / 2;
-  int set_pwm = gpioPWM(PWM_PIN, half_on);
-  printf("Set pwm?: %d\n", set_pwm);
+  // unsigned int half_on = PWM_RANGE / 2;
+  // int set_pwm = gpioPWM(PWM_PIN, half_on);
+  // printf("Set pwm?: %d\n", set_pwm);
 
   double loop_wait_time_sec = (1.0 / SAMPLING_FREQ_HZ);
   long loop_wait_time_nsec = (long) round(loop_wait_time_sec * 1E9);
@@ -134,9 +134,13 @@ int main(int argc, char *argv[])
     enqueue(prev_vel_ests_rs, 0.0);
     enqueue(prev_pos_obs_rad, motor_pos_rad);
   }
-  printf("Init both queues");
+
+  // What percentage of iterations have extra time to spare?
+  // Want it to be 99.9999 or so
+  double num_iters_with_time = 0;
 
   // Sampling loop, do for ten seconds
+  // TODO better difference operator
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
     // Get the current motor position in radians
     motor_pos_rad = main_motor_count * RADS_PER_COUNT;
@@ -144,11 +148,14 @@ int main(int argc, char *argv[])
     // TODO occasional numerical conditioning considerations by keeping 
     // motor position small
     
-    // Do IIR filter calculatorions
+   // Do IIR filter calculatorions
     float vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
-      vel_est_rs += vel_estimator_b[i] * at(prev_vel_ests_rs, i - 1);
-      vel_est_rs -= vel_estimator_a[i] * at(prev_pos_obs_rad, i - 1);
+      // double check the sanity of this
+      // Handle numerator, or previous position obseration terms
+      vel_est_rs += vel_estimator_b[i] * at(prev_pos_obs_rad, VEL_ESTIMATOR_ORDER - i);
+      // Handle denomenator, or previous velocity estimate terms
+      vel_est_rs -= vel_estimator_a[i] * at(prev_vel_ests_rs, VEL_ESTIMATOR_ORDER - i);
     }
     
     // Cycle circular queues 
@@ -161,21 +168,35 @@ int main(int argc, char *argv[])
     num_iters++;
     // Print if its time to do so
     // TODO probably really screws up the timeing on these iterations
+    // TODO clock the operation?
     if ((num_iters % print_loop_freq_iters) == 0) {
-      printf("Motor pos: %f\t vel: %f %li \n", motor_pos_rad, vel_est_rs, num_iters);
+      printf("Motor pos: %f\t vel: %f \t%li \n", motor_pos_rad, vel_est_rs, main_motor_count);
     }
 
     // Wait till the time for this loop expires
     // TODO add automatic check that the sampling time isn't too fast
+    // TODO better robust wait method?
+    unsigned int did_n_times = 0;
     do{
       clock_gettime(CLOCK_REALTIME, &curr_time);
       // Needs to do a slightly more difficult difference operation
       timespec_diff(&curr_loop_time, &curr_time, &time_diff);
+      did_n_times++;
     } while(time_diff.tv_nsec < loop_wait_time_nsec);
+   
+    // Check if that we had time to spare
+    if (did_n_times > 1) {
+      num_iters_with_time++; 
+    }
     curr_loop_time = curr_time;
   }
 
-  printf("Time: %li\n", start_time.tv_sec); 
+
+  timespec_diff(&start_time, &curr_time, &time_diff);
+  printf("Time: %li\n Expected time: %f\n", time_diff.tv_sec, num_iters * loop_wait_time_sec); 
+
+  printf("Iters with time: %f\n", num_iters_with_time / (double) num_iters);
+
   // Don't forget to kill the encoder count process before exiting
   Pi_Renc_cancel(renc);
   gpioTerminate();
