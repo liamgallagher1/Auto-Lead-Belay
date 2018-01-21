@@ -21,14 +21,16 @@
 #define PWM_FREQ_HZ 8000
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 1000
-#define COUNTS_PER_REVOLUTION 2048
+#define PULSES_PER_REVOLUTION 2048
 #define RUN_FOR_TIME_SEC 10
-
 // defines frequency of printout
 #define PRINT_FREQ_HZ 5
 
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 6
+
+// Quadrature Encoder gets 4 counts per pulse
+//static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
 // implicit a_1 = 1.0 filter term included unecessarily 
@@ -37,12 +39,8 @@ static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
 static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
          1.0, -3.696756079437830, 4.983060887903212, -2.753504247774058, 0.345531791427655, 0.121682695559447};
 
-// Assuming quadrature encoder
-// I GOT DUPED
-//static int COUNTS_PER_REVOLUTION = PULSES_PER_REVOLUTION * 4;
-
 // How many radians does each tic correspond to?
-static double RADS_PER_COUNT = 2.0 * M_PI / COUNTS_PER_REVOLUTION;
+static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
 
