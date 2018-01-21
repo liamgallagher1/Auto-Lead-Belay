@@ -12,8 +12,8 @@ default: sampling_driver
 driver: driver.o rotary_encoder.o
 		gcc $(CFLAGS) -o driver driver.o rotary_encoder.o $(LIBS) 
 
-sampling_driver: sampling_driver.o rotary_encoder.o
-		gcc $(CFLAGS) -o sampling_driver sampling_driver.o rotary_encoder.o $(LIBS)
+simple_driver: simple_driver.o
+		gcc $(CFLAGS) -o simple_driver simple_driver.o $(LIBS)
 
 queue_estimator: queue_estimator.o rotary_encoder.o queue.o
 		gcc $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o $(LIBS)
@@ -27,8 +27,8 @@ queue.o: queue.c queue.h
 driver.o: driver.c rotary_encoder.h 
 		gcc $(CFLAGS) -c driver.c $(LIBS)
 
-sampling_driver.o: sampling_driver.c rotary_encoder.h
-		gcc $(CFLAGS) -c sampling_driver.c $(LIBS)
+simple_driver.o: simple_driver.c
+		gcc $(CFLAGS) -c simple_driver.c $(LIBS)
 
 queue_estimator.o: queue_estimator.c rotary_encoder.h queue.h
 		gcc $(CFLAGS) -c queue_estimator.c $(LIBS)

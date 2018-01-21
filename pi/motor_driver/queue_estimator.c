@@ -22,24 +22,39 @@
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 1000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 10
+#define RUN_FOR_TIME_SEC 3
 // defines frequency of printout
 #define PRINT_FREQ_HZ 5
-
 // Order of the estimator
-#define VEL_ESTIMATOR_ORDER 6
+#define VEL_ESTIMATOR_ORDER 40
+
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
 
 // Quadrature Encoder gets 4 counts per pulse
 //static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
 // implicit a_1 = 1.0 filter term included unecessarily 
-static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
-         0.020396475318968,  -0.058825123415598,   0.089540672078545,  -0.089540672078545,   0.058825123415598, -0.020396475318968};
-static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
-         1.0, -3.696756079437830, 4.983060887903212, -2.753504247774058, 0.345531791427655, 0.121682695559447};
+//static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+//         0.020396475318968,  -0.058825123415598,   0.089540672078545,  -0.089540672078545,   0.058825123415598, -0.020396475318968};
+//static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+//         1.0, -3.696756079437830, 4.983060887903212, -2.753504247774058, 0.345531791427655, 0.121682695559447};
 
-// How many radians does each tic correspond to?
+static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+         0.020396475318968,  -0.058825123415598, 1.21, 3.2, 6.7, 2.1, 3.4, 6.9, 1.1, 10.32,
+         0.020396475318968,  -0.058825123415598, 1.21, 3.2, 6.7, 2.1, 3.4, 6.9, 1.1, 10.32,
+         0.020396475318968,  -0.058825123415598, 1.21, 3.2, 6.7, 2.1, 3.4, 6.9, 1.1, 10.32,
+         0.020396475318968,  -0.058825123415598, 1.21, 3.2, 6.7, 2.1, 3.4, 6.9, 1.1, 10.32
+};
+
+static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+         1.0, -3.696756079437830, 3.2, 4.5,  5.50, 6.0, 7.0, 8.9, 9.9, 10.01,
+         1.0, -3.696756079437830, 3.2, 4.5,  5.50, 6.0, 7.0, 8.9, 9.9, 10.01,
+         1.0, -3.696756079437830, 3.2, 4.5,  5.50, 6.0, 7.0, 8.9, 9.9, 10.01,
+         1.0, -3.696756079437830, 3.2, 4.5,  5.50, 6.0, 7.0, 8.9, 9.9, 10.01,
+};
+
 static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
@@ -71,6 +86,7 @@ void timespec_diff(
   }
   return;
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -136,6 +152,11 @@ int main(int argc, char *argv[])
   // What percentage of iterations have extra time to spare?
   // Want it to be 99.9999 or so
   double num_iters_with_time = 0;
+  // How much time has been spend doing the work in the loop, 
+  // not waiting
+  long long total_inner_loop_time_ns = 0;
+  // And wants the slowest loop time
+  long max_inner_loop_time_ns = 0;
 
   // Sampling loop, do for ten seconds
   // TODO better difference operator
@@ -167,9 +188,16 @@ int main(int argc, char *argv[])
     // Print if its time to do so
     // TODO probably really screws up the timeing on these iterations
     // TODO clock the operation?
-    if ((num_iters % print_loop_freq_iters) == 0) {
-      printf("Motor pos: %f\t vel: %f \t%li \n", motor_pos_rad, vel_est_rs, main_motor_count);
-    }
+//    if ((num_iters % print_loop_freq_iters) == 0) {
+//      printf("Motor pos: %f\t vel: %f \t%li \n", motor_pos_rad, vel_est_rs, main_motor_count);
+//    }
+
+
+    // Loop timing code
+    clock_gettime(CLOCK_REALTIME, &curr_time);
+    timespec_diff(&curr_loop_time, &curr_time, &time_diff);
+    total_inner_loop_time_ns += time_diff.tv_nsec;
+    max_inner_loop_time_ns = MAX(time_diff.tv_nsec, max_inner_loop_time_ns);
 
     // Wait till the time for this loop expires
     // TODO add automatic check that the sampling time isn't too fast
@@ -193,6 +221,10 @@ int main(int argc, char *argv[])
   timespec_diff(&start_time, &curr_time, &time_diff);
   printf("Time: %li\n Expected time: %f\n", time_diff.tv_sec, num_iters * loop_wait_time_sec); 
 
+  printf("maximum inner loop time, min freq: %li \t %f\n", max_inner_loop_time_ns, 1000000000 / (double) max_inner_loop_time_ns);
+  total_inner_loop_time_ns /= num_iters;
+
+  printf("Average inner loop time, freq: %li \t %f\n",(long) total_inner_loop_time_ns,  1000000000 / (double) total_inner_loop_time_ns); 
   printf("Iters with time: %f\n", num_iters_with_time / (double) num_iters);
 
   // Don't forget to kill the encoder count process before exiting
