@@ -6,16 +6,16 @@ Ts = 0.001;
 sample_freq_hz = 1 / Ts;
 
 % Velocity filter params
-passband_freq_vel_hz = 450;
+passband_freq_vel_hz = 150;
 rel_cutoff_rad_vel = 2 * passband_freq_vel_hz / sample_freq_hz; 
 vel_order = 10;
 stopband_attenuation_vel_db = 100; 
 
 % Acceleration filter params
-passband_freq_accel_hz = 450;
+passband_freq_accel_hz = 30;
 rel_cutoff_rad_accel = 2 * passband_freq_accel_hz / sample_freq_hz; 
-accel_order = 5;
-stopband_attenuation_accel_db = 100; 
+accel_order = 8;
+stopband_attenuation_accel_db = 40; 
 
 % First order wide band diff: Al-Alaoui operator
 % appropriate version
@@ -49,9 +49,9 @@ diff_c = tf([1, 0], 1);
 diff_d = c2d(diff_c, Ts, 'tustin');
 [b_diff, a_diff] = tfdata(diff_d);
 
+[b_filt_vel_i, a_filt_vel_i] = tfdata(diff_filter_i);
 [b_filt_i_ul, a_filt_i_ul] = tfdata(diff_filter_i_ul);
-%[b_filt_ii_ul, a_filt_ii_ul] = tfdata(diff_filter_ii_ul);
-%freqz(b_filt_i_ul{1}, a_filt_i_ul{1});
+
 
 %% Plot Velocity Filter
 subplot(3, 1, 1);
@@ -88,10 +88,7 @@ xlim([0 1]);
 xticks(0:.5:2);
 xlabel('Normalized Frequency (\times\pi rad/sample)')
 ylabel('Percent Error in Amplitude Resonse')
-%legend('Velocity Fiter', 'Ideal');
 
-% Actual TF to work with to get velocity
-[b_filt_vel_i, a_filt_vel_i] = tfdata(diff_filter_i);
 
 %% Acceleration filter
 figure;
@@ -152,7 +149,7 @@ xlim([0 1]);
 ylim([0, 25]);
 xticks(0:.5:2);
 xlabel('Normalized Frequency (\times\pi rad/sample)')
-ylabel('Percent Error in Amplitude Response(%)')
+ylabel('Percent Error in Amplitude Response')
 legend('Acceleration Estimator');
 
 
@@ -194,3 +191,5 @@ xlabel('Normalized Frequency (\times\pi rad/sample)')
 ylabel('Percent Error in Amplitude Response')
 legend('Acceleration Estimator');
 
+figure;
+test_lowpass_twice_diff;
