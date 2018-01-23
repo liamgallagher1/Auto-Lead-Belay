@@ -54,11 +54,24 @@ static void _cb(int gpio, int level, uint32_t tick, void *user)
       } else {
         (renc->callback)(-1);
       }
-    } else if ((gpio == renc->gpioB) && (level == 1)) {
+    } else if ((gpio == renc->gpioA) && (level == 0)) {
+      if (renc->levB) {
+        (renc->callback)(-1);
+      } else {
+        (renc->callback)(1);
+      }
+    }
+    else if ((gpio == renc->gpioB) && (level == 1)) {
       if (renc->levA) {
         (renc->callback)(-1);
       } else {
         (renc->callback)(1);
+      }
+    } else { // gpio == B, level == 0)
+      if (renc->levA) {
+        (renc->callback)(1);
+      } else {
+        (renc->callback)(-1);
       }
     }
   }
