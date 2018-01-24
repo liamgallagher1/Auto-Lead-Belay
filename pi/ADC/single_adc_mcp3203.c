@@ -40,7 +40,7 @@ a unique MISO line.
 
 #define BUFFER 250       // Generally make this buffer as large as possible.
 
-#define REPEAT_MICROS 40 // Reading every x microseconds.
+#define REPEAT_MICROS 400 // Reading every x microseconds.
 
 #define SAMPLES 2000000  // Number of samples to take,
 
@@ -138,9 +138,9 @@ int main(int argc, char *argv[])
 
    for (i=0; i<BUFFER; i++)
    {
-      buf[0] = 0xC0; // Start bit, single ended, channel 0.
+      buf[0] = 0xE0; // Start bit, single ended, channel 0.
 
-      rawWaveAddSPI(&rawSPI, offset, SPI_SS, buf, 2, BX, B0, B0);
+      rawWaveAddSPI(&rawSPI, offset, SPI_SS, buf, 3, BX, B0, B0);
 
       /*
          REPEAT_MICROS must be more than the time taken to
