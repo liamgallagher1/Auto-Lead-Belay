@@ -13,7 +13,7 @@
 // TODO should extend to multiple ADCS
 
 
-struct ADC_Reader {
+typedef struct ADC_Reader {
   // GPIO Pins
   int slave_select_pin;
   // input(s)
@@ -31,12 +31,12 @@ struct ADC_Reader {
 
   int wave_id_2;
   int last_val_2;
-};
+} ADC_Reader;
 
 
 // Constructs an ADC reader
 // Returns null if theres an error
-ADC_Reader* init_adc_reader(
+struct ADC_Reader* init_adc_reader(
   int slace_select_pin,
   int *miso_pins,
   int num_inputs,

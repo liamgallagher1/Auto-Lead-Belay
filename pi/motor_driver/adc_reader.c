@@ -1,16 +1,29 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+//#include <pigpio.h>
+
+#include "adc_reader.h"
+            
+static int BUFFER = 250;        // "Generally make as large as possible"?
+
+static int BITS = 12;           // Bits per reading.
+static int BX = 6;              // Bit position of data bit B11
+static int B0 = 17;             // Bit position of data bit B0
+
+// Reading every number of microseconds
+// Leads to 1000 Hz sampling
+static int REPEAT_MICROS = 100; 
 
 
-static int BUFFER = 250;
-
-
-ADC_Reader* init_adc_reader(
+struct ADC_Reader* init_adc_reader(
     int slave_select_pin,
     int* miso_pins,
     int num_inputs,
     int mosi_pin,
     int clock_pin)
 {
-  ADC_Reader* reader = (ADC_Reader*) calloc(sizeof(ADC_Reader), 1);
+  ADC_Reader* reader = (struct ADC_Reader*)  calloc(sizeof(struct ADC_Reader), 1);
   reader->slave_select_pin = slave_select_pin;
   reader->miso_pins = miso_pins;
   reader->num_inputs = num_inputs;
@@ -41,7 +54,7 @@ ADC_Reader* init_adc_reader(
    MS  0  0=tx lsb first after tx msb first
    */
   // Construct multiple SPI READS, alternating input source
-  char buf[2];
+  char buff[2];
   buff[0] = 0xC0; // Single Ended, Channel 0
   buff[1] = 0xE0; // Single Ended, Channel 1
  
@@ -56,6 +69,8 @@ ADC_Reader* init_adc_reader(
     offset += REPEAT_MICROS;
   }
   // Create gentle finish (Why do we wait this long?)
+  gpioPulse_t final[2];
+  
   final[0].gpioOn = 0;
   final[0].gpioOff = 0;
   final[0].usDelay = offset;
@@ -66,28 +81,27 @@ ADC_Reader* init_adc_reader(
 
   gpioWaveAddGeneric(2, final);
 
-  wid = gpioWaveCreate(); // Create the wave from added data.
+  int wid = gpioWaveCreate(); // Create the wave from added data.
 
   if (wid < 0){
     printf("Can't create wave, %d too many?\n", BUFFER);
-    return 1;
+    return 0;
   }
-  /*
-      The wave resources are now assigned,  Get the number
-      of control blocks (CBs) so we can calculate which reading
-      is current when the program is running.
+  /**
+   * The wave resources are now assigned,  Get the number
+   *  of control blocks (CBs) so we can calculate which reading
+   *  is current when the program is running.
    */
-  rwi = rawWaveInfo(wid);
+  rawWaveInfo_t  rwi = rawWaveInfo(wid);
   printf("# cb %d-%d ool %d-%d del=%d ncb=%d nb=%d nt=%d\n",
       rwi.botCB, rwi.topCB, rwi.botOOL, rwi.topOOL, rwi.deleted,
       rwi.numCB,  rwi.numBOOL,  rwi.numTOOL);
-   /*
-      CBs are allocated from the bottom up.  As the wave is being
-      transmitted the current CB will be between botCB and topCB
-      inclusive.
+  /**
+   * CBs are allocated from the bottom up.  As the wave is being
+   * transmitted the current CB will be between botCB and topCB
+   * inclusive.
    */
-
-   botCB = rwi.botCB;
+   int botCB = rwi.botCB;
 
 
 }
