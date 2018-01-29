@@ -23,7 +23,9 @@ typedef struct ADC_Reader {
   int mosi_pin;
   // clock
   int clock_pin;
-  // TODO maybe add raw_SPI pointer?
+  // Raw SPI pointer needed for pigpio
+  rawSPI_t* rawSPI;
+
 
   // Wave IDs
   int wave_id_1;

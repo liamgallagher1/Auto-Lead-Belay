@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//#include <pigpio.h>
+#include <pigpio.h>
 
 #include "adc_reader.h"
             
@@ -29,9 +29,21 @@ struct ADC_Reader* init_adc_reader(
   reader->num_inputs = num_inputs;
   reader->mosi_pin = clock_pin;
   reader->clock_pin = clock_pin;
- 
-  if (gpioInitalise() < 0) {
+
+  // Create raw spi type
+  reader->rawSPI = (rawSPI_t *) calloc(sizeof(rawSPI_t), 1);
+
+  reader->rawSPI->clk     =  clock_pin; // GPIO for SPI clock.
+  reader->rawSPI->mosi    =  mosi_pin; // GPIO for SPI MOSI.
+  reader->rawSPI->ss_pol  =  1; // Slave select resting level.
+  reader->rawSPI->ss_us   =  1; // Wait 1 micro after asserting slave select.
+  reader->rawSPI->clk_pol =  0; // Clock resting level.
+  reader->rawSPI->clk_pha =  0; // 0 sample on first edge, 1 sample on second edge.
+  reader->rawSPI->clk_us  =  1; // 2 clocks needed per bit so 500 kbps.
+
+  if (gpioInitialise() < 0) {
     printf("Gpio init failed\n");
+    // TODO free memory
     return 0;
   }
   gpioSetMode(clock_pin, PI_OUTPUT);
@@ -61,9 +73,9 @@ struct ADC_Reader* init_adc_reader(
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      rawWaveAddSPI(&rawSPI, offset, slave_select_pin, buff+1, 3, BX, B0, B0);
+      rawWaveAddSPI(reader->rawSPI, offset, slave_select_pin, buff+1, 3, BX, B0, B0);
     } else {
-      rawWaveAddSPI(&rawSPI, offset, slave_select_pin, buff, 3, BX, B0, B0);
+      rawWaveAddSPI(reader->rawSPI, offset, slave_select_pin, buff, 3, BX, B0, B0);
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
@@ -101,11 +113,29 @@ struct ADC_Reader* init_adc_reader(
    * transmitted the current CB will be between botCB and topCB
    * inclusive.
    */
-   int botCB = rwi.botCB;
+  int botCB = rwi.botCB;
+   /**
+   * Assume each reading uses the same number of CBs (which is
+   * true in this particular example).                        
+   */
+  // TODO understand this                                                        
+  float cbs_per_reading = (float)rwi.numCB / (float)BUFFER;
+  printf("# cbs=%d per read=%.1f base=%d\n",
+      rwi.numCB, cbs_per_reading, botCB);
 
 
+  /**
+  * OOL are allocated from the top down. There are BITS bits
+  * for each ADC reading and BUFFER ADC readings.  The readings
+  * will be stored in topOOL - 1 to topOOL - (BITS * BUFFER).
+  */
+  int topOOL = rwi.topOOL;
+
+  // Send wave to pigpio
+  // maybe TODO sleep?
+  gpioWaveTxSend(wid, PI_WAVE_MODE_REPEAT);
+
+  return reader;
 }
-
-
 
 
