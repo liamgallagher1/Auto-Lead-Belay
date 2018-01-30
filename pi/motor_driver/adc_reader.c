@@ -71,26 +71,22 @@ struct ADC_Reader* init_adc_reader(
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 3, BX, B0, B0));
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 3, BX, B0, B0);
     } else {
-      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0));
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0);
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
   }
-  // Create gentle finish (Why do we wait this long?)
+  // Create gentle finish before it repeats
   gpioPulse_t final[2];
-  
   final[0].gpioOn = 0;
   final[0].gpioOff = 0;
   final[0].usDelay = offset;
-
   final[1].gpioOn = 0; // Need a dummy to force the final delay.
   final[1].gpioOff = 0;
   final[1].usDelay = 0;
-
   gpioWaveAddGeneric(2, final);
-
   int wid = gpioWaveCreate(); // Create the wave from added data.
 
   if (wid < 0){
@@ -98,6 +94,7 @@ struct ADC_Reader* init_adc_reader(
     free_adc_reader(reader);
     return 0;
   }
+  
   /**
    * The wave resources are now assigned,  Get the number
    *  of control blocks (CBs) so we can calculate which reading
@@ -119,7 +116,7 @@ struct ADC_Reader* init_adc_reader(
    * Assume each reading uses the same number of CBs (which is
    * true in this particular example).                        
    */
-  // TODO understand this                                                        
+  // TODO understand what this float means.                                                       
   float cbs_per_reading = (float)rwi.numCB / (float)BUFFER;
   reader->cbs_per_reading = cbs_per_reading;
   printf("# cbs=%d per read=%.1f base=%d\n",
@@ -133,14 +130,14 @@ struct ADC_Reader* init_adc_reader(
   */
   reader->topOOL = rwi.topOOL;
 
-  // Send wave to pigpio
-  // maybe TODO sleep?
+  // Send wave to pigpio, set to repeat
   gpioWaveTxSend(wid, PI_WAVE_MODE_REPEAT);
 
   return reader;
 }
 
-
+// Frees resources allocated to the reader
+// Terminates the gpio as well. unclear if this is wise.
 void free_adc_reader(
   ADC_Reader* reader)
 {
@@ -166,7 +163,6 @@ void get_reading(
 
   for (int i = 0; i < bits; i++) {
     level = rawWaveGetOut(p);
-    // do it twice, hope to get one of each reading 
     // TODO understand this
     int a = 0; // This can go unless we use more adcs
     putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
@@ -181,42 +177,40 @@ void last_readings(
   int* raw_reading,
   int* amplified_reading)
 {
-  // which reading is current?
+  // Control block for current reading
   int cb = rawWaveCB() - reader->rwi.botCB;  
-  
-  int now_reading = (int) round((float) cb / reader->cbs_per_reading);
-  
-  int reading = 0;
  
+  // Which "reading #" is this?
+  int now_reading = (int) round((float) cb / reader->cbs_per_reading);
+  // Go to two readings previous, I think
+  now_reading = (now_reading + BUFFER - 2) % BUFFER;
+  // Raw data to output readings too 
   char rx[8];
 
-  while (now_reading != reading) {
-    // get reading from either CH1 or CH2
-    int OOL = reader->topOOL - ((reading % BUFFER) * BITS) - 1;
-    // Black magic that may or may not work
-    get_reading(reader, OOL, 2, BITS, rx);
-    int i = 0;
-    // Pull the numbers from that
-    int val1 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
-    
-    // get it from the other one 
-    reading++;
-    OOL = reader->topOOL - ((reading % BUFFER) * BITS) - 1;
-    // Black magic that may or may not work
-    get_reading(reader, OOL, 2, BITS, rx);
-    // Pull the numbers from that
-    int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
-
-    
-    if (val1 < val2) {
-      *raw_reading = val1;
-      *amplified_reading = val2;
-    } else {
-      *raw_reading = val2;
-      *amplified_reading = val1;
-    }
-    return;
-    // TODO WTF if this reading nonsense
+  // get reading from either CH1 or CH2
+  int OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
+  // Black magic that may or may not work
+  get_reading(reader, OOL, 2, BITS, rx);
+  int i = 0;
+  // Pull the values from that
+  int val1 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
+  
+  // now get reading from the other one 
+  now_reading++;
+  OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
+  // Black magic that may or may not work
+  get_reading(reader, OOL, 2, BITS, rx);
+  // Pull the values from that 
+  int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
+ 
+  // Currently just use the lesser one to be non amplified
+  if (val1 < val2) {
+    *raw_reading = val1;
+    *amplified_reading = val2;
+  } else {
+    *raw_reading = val2;
+    *amplified_reading = val1;
   }
+  return;
 }
 

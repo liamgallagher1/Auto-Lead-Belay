@@ -8,11 +8,11 @@
  * Modified by Liam Gallagher liam.gallagher0@gmail.com in January 2018
  */
 
-// Creates an ADC reader to reach from both D1 and D2 pins of an MCP3202
-// Theres probably a better way
-// TODO should extend to multiple ADCS
+// Creates an ADC reader to read from both D1 and D2 pins of an MCP3202
+// Theres probably a better way to do this
+// TODO actually add the ability to do this from multiple inputs
 
-
+// Persistent data for the reader
 typedef struct ADC_Reader {
   // GPIO Pins
   int slave_select_pin;
@@ -28,17 +28,12 @@ typedef struct ADC_Reader {
   // Wave Info
   rawWaveInfo_t rwi;
 
+
+  // This state was copied from the old implementation.
+  // I don't understand it or like their style.
   int topOOL;
   // Why do I do this though
   float cbs_per_reading;
-
-  // Wave IDs
-  // TODO can I delete this?
-  int wave_id_1;
-  int last_val_1;
-
-  int wave_id_2;
-  int last_val_2;
 } ADC_Reader;
 
 
@@ -51,18 +46,17 @@ struct ADC_Reader* init_adc_reader(
   int mosi_pin,
   int clock_pin);
 
-// Frees reader resources.
-// don't not use reader after this
+// Free's reader resources.
+// Don't not use reader after this
 // NOTE termindates GPIO as well
 void free_adc_reader(
   ADC_Reader* reader);
 
 
-
+// Gets the most recent readings from the ADC
+// TODO currently assumes that the amplified value is greater
+// TODO might currently add a delay
 void last_readings(
   ADC_Reader* reader,
   int* raw_reading,
   int* amplified_reading);
-
-
-
