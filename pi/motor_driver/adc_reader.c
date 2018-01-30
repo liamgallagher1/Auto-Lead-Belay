@@ -41,7 +41,6 @@ struct ADC_Reader* init_adc_reader(
 
   if (gpioInitialise() < 0) {
     printf("Gpio init failed\n");
-    // TODO free memory
     free_adc_reader(reader);
     return 0;
   }
@@ -72,9 +71,9 @@ struct ADC_Reader* init_adc_reader(
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, buff+1, 3, BX, B0, B0);
+      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0));
     } else {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, buff, 3, BX, B0, B0);
+      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0));
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
