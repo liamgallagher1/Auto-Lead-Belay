@@ -71,7 +71,7 @@ struct ADC_Reader* init_adc_reader(
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0));
+      printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 3, BX, B0, B0));
     } else {
       printf("%d\n", rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0));
     }
@@ -167,10 +167,8 @@ void get_reading(
   for (int i = 0; i < bits; i++) {
     level = rawWaveGetOut(p);
     // do it twice, hope to get one of each reading 
-    int a = 0;
     // TODO understand this
-    putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
-    a++;
+    int a = 0; // This can go unless we use more adcs
     putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
     p--;
   }
@@ -193,14 +191,23 @@ void last_readings(
   char rx[8];
 
   while (now_reading != reading) {
+    // get reading from either CH1 or CH2
     int OOL = reader->topOOL - ((reading % BUFFER) * BITS) - 1;
     // Black magic that may or may not work
     get_reading(reader, OOL, 2, BITS, rx);
     int i = 0;
     // Pull the numbers from that
     int val1 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
-    i++;
+    
+    // get it from the other one 
+    reading++;
+    OOL = reader->topOOL - ((reading % BUFFER) * BITS) - 1;
+    // Black magic that may or may not work
+    get_reading(reader, OOL, 2, BITS, rx);
+    // Pull the numbers from that
     int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
+
+    
     if (val1 < val2) {
       *raw_reading = val1;
       *amplified_reading = val2;
