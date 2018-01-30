@@ -84,7 +84,6 @@ void timespec_diff(
     result->tv_sec = stop->tv_sec - start->tv_sec;
     result->tv_nsec = stop->tv_nsec - start->tv_nsec;
   }
-  return;
 }
 
 

@@ -33,6 +33,7 @@ typedef struct ADC_Reader {
   float cbs_per_reading;
 
   // Wave IDs
+  // TODO can I delete this?
   int wave_id_1;
   int last_val_1;
 
