@@ -27,6 +27,9 @@ queue.o: queue.c queue.h
 driver.o: driver.c rotary_encoder.h 
 		gcc $(CFLAGS) -c driver.c $(LIBS)
 
+adc_reader.o: adc_reader.c adc_reader.h
+	gcc $(CFLAGS) -c adc_reader.c $(LIBS)
+
 simple_driver.o: simple_driver.c
 		gcc $(CFLAGS) -c simple_driver.c $(LIBS)
 

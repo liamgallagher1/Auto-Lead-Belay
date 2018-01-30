@@ -24,8 +24,13 @@ typedef struct ADC_Reader {
   // clock
   int clock_pin;
   // Raw SPI pointer needed for pigpio
-  rawSPI_t* rawSPI;
+  rawSPI_t rawSPI;
+  // Wave Info
+  rawWaveInfo_t rwi;
 
+  int topOOL;
+  // Why do I do this though
+  float cbs_per_reading;
 
   // Wave IDs
   int wave_id_1;
@@ -45,5 +50,18 @@ struct ADC_Reader* init_adc_reader(
   int mosi_pin,
   int clock_pin);
 
-// TODO something that actually reads them
+// Frees reader resources.
+// don't not use reader after this
+// NOTE termindates GPIO as well
+void free_adc_reader(
+  ADC_Reader* reader);
+
+
+
+void last_readings(
+  ADC_Reader* reader,
+  int* raw_reading,
+  int* amplified_reading);
+
+
 

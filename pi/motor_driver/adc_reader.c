@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -15,7 +16,6 @@ static int B0 = 17;             // Bit position of data bit B0
 // Leads to 1000 Hz sampling
 static int REPEAT_MICROS = 100; 
 
-
 struct ADC_Reader* init_adc_reader(
     int slave_select_pin,
     int* miso_pins,
@@ -31,19 +31,18 @@ struct ADC_Reader* init_adc_reader(
   reader->clock_pin = clock_pin;
 
   // Create raw spi type
-  reader->rawSPI = (rawSPI_t *) calloc(sizeof(rawSPI_t), 1);
-
-  reader->rawSPI->clk     =  clock_pin; // GPIO for SPI clock.
-  reader->rawSPI->mosi    =  mosi_pin; // GPIO for SPI MOSI.
-  reader->rawSPI->ss_pol  =  1; // Slave select resting level.
-  reader->rawSPI->ss_us   =  1; // Wait 1 micro after asserting slave select.
-  reader->rawSPI->clk_pol =  0; // Clock resting level.
-  reader->rawSPI->clk_pha =  0; // 0 sample on first edge, 1 sample on second edge.
-  reader->rawSPI->clk_us  =  1; // 2 clocks needed per bit so 500 kbps.
+  reader->rawSPI.clk     =  clock_pin; // GPIO for SPI clock.
+  reader->rawSPI.mosi    =  mosi_pin; // GPIO for SPI MOSI.
+  reader->rawSPI.ss_pol  =  1; // Slave select resting level.
+  reader->rawSPI.ss_us   =  1; // Wait 1 micro after asserting slave select.
+  reader->rawSPI.clk_pol =  0; // Clock resting level.
+  reader->rawSPI.clk_pha =  0; // 0 sample on first edge, 1 sample on second edge.
+  reader->rawSPI.clk_us  =  1; // 2 clocks needed per bit so 500 kbps.
 
   if (gpioInitialise() < 0) {
     printf("Gpio init failed\n");
     // TODO free memory
+    free_adc_reader(reader);
     return 0;
   }
   gpioSetMode(clock_pin, PI_OUTPUT);
@@ -73,9 +72,9 @@ struct ADC_Reader* init_adc_reader(
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      rawWaveAddSPI(reader->rawSPI, offset, slave_select_pin, buff+1, 3, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, buff+1, 3, BX, B0, B0);
     } else {
-      rawWaveAddSPI(reader->rawSPI, offset, slave_select_pin, buff, 3, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, buff, 3, BX, B0, B0);
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
@@ -97,6 +96,7 @@ struct ADC_Reader* init_adc_reader(
 
   if (wid < 0){
     printf("Can't create wave, %d too many?\n", BUFFER);
+    free_adc_reader(reader);
     return 0;
   }
   /**
@@ -104,7 +104,9 @@ struct ADC_Reader* init_adc_reader(
    *  of control blocks (CBs) so we can calculate which reading
    *  is current when the program is running.
    */
-  rawWaveInfo_t  rwi = rawWaveInfo(wid);
+  rawWaveInfo_t rwi = rawWaveInfo(wid);
+  reader->rwi = rwi;
+
   printf("# cb %d-%d ool %d-%d del=%d ncb=%d nb=%d nt=%d\n",
       rwi.botCB, rwi.topCB, rwi.botOOL, rwi.topOOL, rwi.deleted,
       rwi.numCB,  rwi.numBOOL,  rwi.numTOOL);
@@ -120,6 +122,7 @@ struct ADC_Reader* init_adc_reader(
    */
   // TODO understand this                                                        
   float cbs_per_reading = (float)rwi.numCB / (float)BUFFER;
+  reader->cbs_per_reading = cbs_per_reading;
   printf("# cbs=%d per read=%.1f base=%d\n",
       rwi.numCB, cbs_per_reading, botCB);
 
@@ -129,7 +132,7 @@ struct ADC_Reader* init_adc_reader(
   * for each ADC reading and BUFFER ADC readings.  The readings
   * will be stored in topOOL - 1 to topOOL - (BITS * BUFFER).
   */
-  int topOOL = rwi.topOOL;
+  reader->topOOL = rwi.topOOL;
 
   // Send wave to pigpio
   // maybe TODO sleep?
@@ -138,4 +141,76 @@ struct ADC_Reader* init_adc_reader(
   return reader;
 }
 
+
+void free_adc_reader(
+  ADC_Reader* reader)
+{
+  if (!reader) return;
+  free(reader);
+  gpioTerminate();
+}
+
+/*
+ * This function extracts the MISO bits for each ADC and
+ * collates them into a reading per ADC.
+ */
+void get_reading(
+  ADC_Reader* reader, // The reader struct
+  int OOL,   // Address of first OOL for this reading.
+  int bytes, // Bytes between readings.
+  int bits,  // Bits per reading.
+  char *buf) // Output 
+{
+  uint32_t level;
+
+  int p = OOL;
+
+  for (int i = 0; i < bits; i++) {
+    level = rawWaveGetOut(p);
+    // do it twice, hope to get one of each reading 
+    int a = 0;
+    // TODO understand this
+    putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
+    a++;
+    putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
+    p--;
+  }
+}
+
+
+
+void last_readings(
+  ADC_Reader* reader,
+  int* raw_reading,
+  int* amplified_reading)
+{
+  // which reading is current?
+  int cb = rawWaveCB() - reader->rwi.botCB;  
+  
+  int now_reading = (int) round((float) cb / reader->cbs_per_reading);
+  
+  int reading = 0;
+ 
+  char rx[8];
+
+  while (now_reading != reading) {
+    int OOL = reader->topOOL - ((reading % BUFFER) * BITS) - 1;
+    // Black magic that may or may not work
+    get_reading(reader, OOL, 2, BITS, rx);
+    int i = 0;
+    // Pull the numbers from that
+    int val1 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
+    i++;
+    int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
+    if (val1 < val2) {
+      *raw_reading = val1;
+      *amplified_reading = val2;
+    } else {
+      *raw_reading = val2;
+      *amplified_reading = val1;
+    }
+    return;
+    // TODO WTF if this reading nonsense
+  }
+}
 
