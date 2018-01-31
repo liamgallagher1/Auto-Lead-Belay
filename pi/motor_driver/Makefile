@@ -18,8 +18,8 @@ simple_driver: simple_driver.o
 simple_reader: simple_reader.o adc_reader.o
 	gcc $(CFLAGS) -o simple_reader simple_reader.o adc_reader.o $(LIBS)
 
-queue_estimator: queue_estimator.o rotary_encoder.o queue.o
-		gcc $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o $(LIBS)
+queue_estimator: queue_estimator.o rotary_encoder.o queue.o adc_reader.o
+		gcc $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o adc_reader.o $(LIBS)
 
 rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)

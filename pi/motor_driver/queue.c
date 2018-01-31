@@ -17,8 +17,8 @@
 
 Queue *createQueue(size_t size)
 {
-	Queue *q = malloc(sizeof(Queue));
-	q->vector = malloc(sizeof(Element) * size);
+	Queue *q = calloc(sizeof(Queue), 1);
+	q->vector = calloc(sizeof(Element) * size, 1);
 	q->size = size;
 	q->head = 0;
 	q->tail = 0;
