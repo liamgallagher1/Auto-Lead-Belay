@@ -10,18 +10,20 @@
 #include "rotary_encoder.h"
 #include "queue.h"
 
-#define DIR_PIN 17
-#define PWM_PIN 27
+//#define DIR_PIN 25
+//#define PWM_PIN 8
+#define DIR_PIN 8
+#define PWM_PIN 25
 
-#define ENCODER_A_PIN 16
-#define ENCODER_B_PIN 20
+#define ENCODER_A_PIN 23
+#define ENCODER_B_PIN 24
 
 // TODO fix pins
 
-#define SPI_PIN  22 // GPIO for slave select.
-#define MISO_PIN 19 // Input 
-#define MOSI_PIN 26 // Output
-#define CLK_PIN  13 // Clock
+#define SPI_PIN  7 // GPIO for slave select.
+#define MISO_PIN 9 // Input 
+#define MOSI_PIN 10 // Output
+#define CLK_PIN  11 // Clock
 
 
 // duty cycle range used by pwm
@@ -31,7 +33,7 @@
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 1000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 5
+#define RUN_FOR_TIME_SEC 15
 // defines frequency of printout
 #define PRINT_FREQ_HZ 10
 // Order of the estimator
@@ -50,9 +52,11 @@ static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
     0.1202, -0.2310, 0.4283, -0.4000, 0.3820, -0.2771, 0.2771, -0.3820, 0.4000, -0.4283, 0.2310, -0.1202
 };
 
+
 static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
     1.0000, -6.2197, 17.7840, -30.5757, 34.7733, -27.0961, 14.4329, -5.0187, 0.9795,   -0.0385,   -0.0234, 0.0035
 };
+
 
 static float accel_estimator_b[ACCEL_ESTIMATOR_ORDER] = {
   9.3759, -75.3733, 276.0036, -605.9827,  881.1613, -881.1613,  605.9827, -276.0036, 75.3733,  -9.3759
@@ -113,8 +117,10 @@ int main(int argc, char *argv[])
   gpioSetMode(DIR_PIN,  PI_OUTPUT);
   gpioSetMode(PWM_PIN, PI_OUTPUT);
  
+  //gpioSetPullUpDown(DIR_PIN, PI_PUD_DOWN);
+  //gpioSetPullUpDown(PWM_PIN, PI_PUD_DOWN);
   // Turn on forward direction
-  gpioWrite(DIR_PIN, 1);
+  gpioWrite(DIR_PIN, 0);
 
   // The asked for frequency isn't necessarily the set one
   // because of sample rate considerations
@@ -263,9 +269,10 @@ int main(int argc, char *argv[])
   printf("Iters with time: %f\n", num_iters_with_time / (double) num_iters);
 
   // Turn off PWM?
-  set_pwm = gpioPWM(PWM_PIN, 0);
-
-
+  set_pwm = gpioWrite(PWM_PIN, 0);
+  printf("PWM OFF? %d\n", set_pwm);
+  set_pwm = gpioWrite(DIR_PIN, 0);
+  printf("DIR OFF? %d\n", set_pwm);
   // Don't forget to kill the encoder count process before exiting
   Pi_Renc_cancel(renc);
   free_adc_reader(reader);
