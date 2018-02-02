@@ -31,7 +31,7 @@
 // ideal frequency of PWM output in HZ
 #define PWM_FREQ_HZ 8000
 // frequency the count is quieried
-#define SAMPLING_FREQ_HZ 1000
+#define SAMPLING_FREQ_HZ 4000
 #define PULSES_PER_REVOLUTION 2048
 #define RUN_FOR_TIME_SEC 15
 // defines frequency of printout
@@ -48,21 +48,31 @@ static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
 // implicit a_1 = 1.0 filter term included unecessarily 
-static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
-    0.1202, -0.2310, 0.4283, -0.4000, 0.3820, -0.2771, 0.2771, -0.3820, 0.4000, -0.4283, 0.2310, -0.1202
+//static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+//    0.1202, -0.2310, 0.4283, -0.4000, 0.3820, -0.2771, 0.2771, -0.3820, 0.4000, -0.4283, 0.2310, -0.1202
+//};
+
+static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+  41.4895856544645, -370.492408422197, 1473.26031862357, -3424.09533031117, 5126.02498600793, -5126.02498600793, 
+  3424.09533031117, -1473.26031862357, 370.492408422196, -41.4895856544644
+};
+
+//static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+//    1.0000, -6.2197, 17.7840, -30.5757, 34.7733, -27.0961, 14.4329, -5.0187, 0.9795,   -0.0385,   -0.0234, 0.0035
+//};
+
+static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+  1, -7.62789647849086, 25.3113840106525, -47.5666759564674, 55.0255254778286, -39.5730525988382, 
+  16.6342418997334, -3.17748822853527, -0.139626741142248, 0.113588615291234
 };
 
 
-static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
-    1.0000, -6.2197, 17.7840, -30.5757, 34.7733, -27.0961, 14.4329, -5.0187, 0.9795,   -0.0385,   -0.0234, 0.0035
-};
 
-
-static float accel_estimator_b[ACCEL_ESTIMATOR_ORDER] = {
+static double accel_estimator_b[ACCEL_ESTIMATOR_ORDER] = {
   9.3759, -75.3733, 276.0036, -605.9827,  881.1613, -881.1613,  605.9827, -276.0036, 75.3733,  -9.3759
 };
 
-static float accel_estimator_a[ACCEL_ESTIMATOR_ORDER] = {
+static double accel_estimator_a[ACCEL_ESTIMATOR_ORDER] = {
     1.0000, -6.9395, 20.9819, -35.9672, 37.9638, -24.8748, 9.4597, -1.5716, -0.1093, 0.0570
 };
 
@@ -163,7 +173,7 @@ int main(int argc, char *argv[])
   Queue* prev_vel_ests_rs =    createQueue(queue_size + 1);
   Queue* prev_pos_obs_rad =    createQueue(queue_size + 1);
   
-  float motor_pos_rad = main_motor_count * RADS_PER_COUNT;
+  double motor_pos_rad = main_motor_count * RADS_PER_COUNT;
   int raw_adc_reading;
   int amplified_adc_reading;
   
@@ -192,7 +202,7 @@ int main(int argc, char *argv[])
     // motor position small
     
    // Do IIR filter calculatorions
-    float vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
+    double vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
       // double check the sanity of this
       // Handle numerator, or previous position obseration terms
@@ -201,7 +211,7 @@ int main(int argc, char *argv[])
       vel_est_rs -= vel_estimator_a[i] * at(prev_vel_ests_rs, VEL_ESTIMATOR_ORDER - i);
     }
 
-    float accel_est_rss = vel_estimator_b[0] * vel_est_rs;
+    double accel_est_rss = vel_estimator_b[0] * vel_est_rs;
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
       // Handle numerator, or previous velocity estimation terms
       accel_est_rss += vel_estimator_b[i] * at(prev_vel_ests_rs,
