@@ -33,25 +33,48 @@ struct _Pi_Renc_s
 
 static void _cb(int gpio, int level, uint32_t tick, void *user)
 {
-   Pi_Renc_t *renc;
+  Pi_Renc_t *renc;
 
-   renc = user;
+  renc = user;
+  // Set GPIO State
+  if (gpio == renc->gpioA) {
+    renc->levA = level; 
+  } else {
+    renc->levB = level;
+  }
 
-   if (gpio == renc->gpioA) renc->levA = level; else renc->levB = level;
+  // If it didn't just jitter on an edge?
+  if (gpio != renc->lastGpio) /* debounce */ {
+    renc->lastGpio = gpio;
 
-   if (gpio != renc->lastGpio) /* debounce */
-   {
-      renc->lastGpio = gpio;
-
-      if ((gpio == renc->gpioA) && (level == 1))
-      {
-         if (renc->levB) (renc->callback)(1);
+    // Figure out cases to count up or down on
+    if ((gpio == renc->gpioA) && (level == 1)){
+      if (renc->levB) {
+        (renc->callback)(1);
+      } else {
+        (renc->callback)(-1);
       }
-      else if ((gpio == renc->gpioB) && (level == 1))
-      {
-         if (renc->levA) (renc->callback)(-1);
+    } else if ((gpio == renc->gpioA) && (level == 0)) {
+      if (renc->levB) {
+        (renc->callback)(-1);
+      } else {
+        (renc->callback)(1);
       }
-   }
+    }
+    else if ((gpio == renc->gpioB) && (level == 1)) {
+      if (renc->levA) {
+        (renc->callback)(-1);
+      } else {
+        (renc->callback)(1);
+      }
+    } else { // gpio == B, level == 0)
+      if (renc->levA) {
+        (renc->callback)(1);
+      } else {
+        (renc->callback)(-1);
+      }
+    }
+  }
 }
 
 Pi_Renc_t * Pi_Renc(int gpioA, int gpioB, Pi_Renc_CB_t callback)

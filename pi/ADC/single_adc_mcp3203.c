@@ -36,20 +36,20 @@ a unique MISO line.
 #define BX 6               // Bit position of data bit B11.
 #define B0 (BX + BITS - 1) // Bit position of data bit B0.
 
-#define MISO1 17   // ADC 1 MISO.
+#define MISO1 19   // ADC 1 MISO.
 
 #define BUFFER 250       // Generally make this buffer as large as possible.
 
-#define REPEAT_MICROS 40 // Reading every x microseconds.
+#define REPEAT_MICROS 400 // Reading every x microseconds.
 
 #define SAMPLES 2000000  // Number of samples to take,
 
-int MISO[ADCS]={MISO};
+int MISO[ADCS]={MISO1};
 
 rawSPI_t rawSPI =
 {
-   .clk     =  18, // GPIO for SPI clock.
-   .mosi    = 27, // GPIO for SPI MOSI.
+   .clk     =  13, // GPIO for SPI clock.
+   .mosi    = 26, // GPIO for SPI MOSI.
    .ss_pol  =  1, // Slave select resting level.
    .ss_us   =  1, // Wait 1 micro after asserting slave select.
    .clk_pol =  0, // Clock resting level.
@@ -138,9 +138,9 @@ int main(int argc, char *argv[])
 
    for (i=0; i<BUFFER; i++)
    {
-      buf[0] = 0xC0; // Start bit, single ended, channel 0.
+      buf[0] = 0xE0; // Start bit, single ended, channel 0.
 
-      rawWaveAddSPI(&rawSPI, offset, SPI_SS, buf, 2, BX, B0, B0);
+      rawWaveAddSPI(&rawSPI, offset, SPI_SS, buf, 3, BX, B0, B0);
 
       /*
          REPEAT_MICROS must be more than the time taken to

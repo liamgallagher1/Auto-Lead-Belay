@@ -44,7 +44,7 @@ a unique MISO line.
 
 #define BUFFER 250       // Generally make this buffer as large as possible.
 
-#define REPEAT_MICROS 40 // Reading every x microseconds.
+#define REPEAT_MICROS 100 // Reading every x microseconds.
 
 #define SAMPLES 2000000  // Number of samples to take,
 
