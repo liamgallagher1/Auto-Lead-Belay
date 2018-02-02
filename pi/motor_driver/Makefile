@@ -1,7 +1,8 @@
 TARGET = sampling_driver driver
 LIBS = -lpthread -lpigpio -lm
 CC = gcc
-CFLAGS =  -Wall -pthread
+CPPC = g++
+CFLAGS =  -Wall -pthread # -O3 Be sure to use this when it matters
 
 .PHONY: default all clean
 
@@ -19,7 +20,7 @@ simple_reader: simple_reader.o adc_reader.o
 	gcc $(CFLAGS) -o simple_reader simple_reader.o adc_reader.o $(LIBS)
 
 queue_estimator: queue_estimator.o rotary_encoder.o queue.o adc_reader.o
-		gcc $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o adc_reader.o $(LIBS)
+		$(CPPC)  $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o adc_reader.o $(LIBS)
 
 rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)
@@ -39,9 +40,8 @@ simple_driver.o: simple_driver.c
 simple_reader.o: simple_reader.c
 	gcc $(CFLAGS) -c simple_reader.c $(LIBS)
 
-queue_estimator.o: queue_estimator.c rotary_encoder.h queue.h
-		gcc $(CFLAGS) -c queue_estimator.c $(LIBS)
-
+queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h
+		$(CPPC)  $(CFLAGS) -c queue_estimator.cpp $(LIBS)
 
 clean:
 		-rm -f *.o

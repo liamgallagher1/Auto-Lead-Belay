@@ -6,9 +6,12 @@
 
 #include <pigpio.h>
 
+extern "C"
+{
 #include "adc_reader.h"
 #include "rotary_encoder.h"
 #include "queue.h"
+}
 
 //#define DIR_PIN 25
 //#define PWM_PIN 8
