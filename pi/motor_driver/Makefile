@@ -2,7 +2,7 @@ TARGET = sampling_driver driver
 LIBS = -lpthread -lpigpio -lm
 CC = gcc
 CPPC = g++ -std=c++11
-CFLAGS =  -Wall -pthread # -O3 Be sure to use this when it matters
+CFLAGS =  -Wall -pthread -O3 #Be sure to use this when it matters
 
 .PHONY: default all clean
 
@@ -43,7 +43,7 @@ simple_driver.o: simple_driver.c
 simple_reader.o: simple_reader.c
 	gcc $(CFLAGS) -c simple_reader.c $(LIBS)
 
-queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h
+queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h time_functions.hpp loop_state.hpp
 		$(CPPC)  $(CFLAGS) -c queue_estimator.cpp $(LIBS)
 
 clean:

@@ -16,6 +16,7 @@ extern "C"
 #include "queue.h"
 }
 #include "loop_state.hpp"
+#include "time_functions.hpp"
 
 using namespace std;
 
@@ -38,7 +39,7 @@ using namespace std;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 4000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 10
+#define RUN_FOR_TIME_SEC 100
 // defines frequency of printout
 #define PRINT_FREQ_HZ 10
 // Order of the estimator
@@ -73,7 +74,6 @@ static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {
   16.6342418997334, -3.17748822853527, -0.139626741142248, 0.113588615291234
 };
 
-
 static double accel_estimator_b[ACCEL_ESTIMATOR_ORDER] = {
   9.3759, -75.3733, 276.0036, -605.9827,  881.1613, -881.1613,  605.9827, -276.0036, 75.3733,  -9.3759
 };
@@ -97,21 +97,6 @@ void callback(int dir)
   }
 }
 
-// Calculates the difference of two times
-// TODO put the function elsewhere
-void timespec_diff(
-    struct timespec *start, 
-    struct timespec *stop,
-    struct timespec *result)
-{
-  if ((stop->tv_nsec - start->tv_nsec) < 0) {
-    result->tv_sec = stop->tv_sec - start->tv_sec - 1;
-    result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
-  } else {
-    result->tv_sec = stop->tv_sec - start->tv_sec;
-    result->tv_nsec = stop->tv_nsec - start->tv_nsec;
-  }
-}
 
 int main(int argc, char *argv[])
 {
@@ -157,16 +142,7 @@ int main(int argc, char *argv[])
   // Chill for a second ?
   //sleep(1);
   
-  // Use timespec to wait for precise amounts of time
-  // Time that we started the prgram after init,
-  struct timespec start_time;
-  // Time that we started this loop,
-  struct timespec curr_loop_time;
-  // Current time, if we are waiting for the loops period to expire
-  struct timespec curr_time, time_diff;
-  clock_gettime(CLOCK_REALTIME, &start_time);
-  clock_gettime(CLOCK_REALTIME, &curr_loop_time);
- 
+   
   long num_iters = 0;
 
   int queue_size = MAX(VEL_ESTIMATOR_ORDER, ACCEL_ESTIMATOR_ORDER) + 1;
@@ -198,9 +174,30 @@ int main(int argc, char *argv[])
   vector<LoopState> history;
   history.reserve((RUN_FOR_TIME_SEC + 1) * SAMPLING_FREQ_HZ); 
 
+
+  // Use timespec to wait for precise amounts of time
+  // Time that we started the prgram after init,
+  struct timespec start_time;
+  // Time to finish this jawn
+  struct timespec finish_time;
+  // Time that we started this loop,
+  struct timespec curr_loop_time;
+  // Current time, if we are waiting for the loops period to expire
+  struct timespec curr_time, time_diff;
+  // Time to start next loop. Always add to it the proper number of nanoseconds.
+  struct timespec next_loop_time;  
+  
+  clock_gettime(CLOCK_REALTIME, &start_time);
+  add_time(&start_time, RUN_FOR_TIME_SEC, 0, &finish_time);
+  clock_gettime(CLOCK_REALTIME, &curr_loop_time);
+  add_time(&curr_loop_time, 0, loop_wait_time_nsec, &next_loop_time); 
+  
+  cout << "Going into inner loop " << endl;
+  sleep(1);
+
   // Sampling loop, do for ten seconds
   // TODO better difference operator
-  while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
+  while(!past_time(&curr_loop_time, &finish_time)) {
     // Get the current motor position in radians
     long prev_count = main_motor_count;
     motor_pos_rad = main_motor_count * RADS_PER_COUNT;
@@ -241,6 +238,7 @@ int main(int argc, char *argv[])
     // Get ADC readings
     last_readings(reader, &raw_adc_reading, &amplified_adc_reading);
 
+    // Calculate and execute output.
     double time_s = (num_iters % (SAMPLING_FREQ_HZ * CHIRP_TIME_S)) / loop_wait_time_sec; 
     // calculate chirp output
     float u_of_t = CHIRP_OFFSET + CHIRP_AMP * sin(2 * M_PI * 
@@ -251,6 +249,7 @@ int main(int argc, char *argv[])
     unsigned int pwm_in = (unsigned int) round(u_of_t * PWM_RANGE);
     gpioPWM(PWM_PIN, pwm_in);
  
+    // Record the current state
     LoopState state;
     state.loop_time = curr_time;
     state.motor_count = prev_count;
@@ -264,7 +263,6 @@ int main(int argc, char *argv[])
 
     num_iters++;
     // Print if its time to do so
-    // TODO probably really screws up the timeing on these iterations
     // TODO clock the operation?
     if ((num_iters % print_loop_freq_iters) == 0) {
       cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
@@ -272,28 +270,26 @@ int main(int argc, char *argv[])
         "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << pwm_in << endl; 
     }
 
-
     // Loop timing code
+    // TODO cut some of this crud
     clock_gettime(CLOCK_REALTIME, &curr_time);
     timespec_diff(&curr_loop_time, &curr_time, &time_diff);
     total_inner_loop_time_ns += time_diff.tv_nsec;
     max_inner_loop_time_ns = MAX(time_diff.tv_nsec, max_inner_loop_time_ns);
 
     // Wait till the time for this loop expires
-    // TODO add automatic check that the sampling time isn't too fast
-    // TODO better robust wait method?
     unsigned int did_n_times = 0;
     do{
       clock_gettime(CLOCK_REALTIME, &curr_time);
-      // Needs to do a slightly more difficult difference operation
-      timespec_diff(&curr_loop_time, &curr_time, &time_diff);
       did_n_times++;
-    } while(time_diff.tv_nsec < loop_wait_time_nsec);
+    } while(!past_time(&curr_time, &next_loop_time));
    
     // Check if that we had time to spare
     if (did_n_times > 1) {
       num_iters_with_time++; 
     }
+    
+    add_time(&next_loop_time, 0, loop_wait_time_nsec, &next_loop_time);
     curr_loop_time = curr_time;
   }
 
