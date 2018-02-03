@@ -1,11 +1,13 @@
 #pragma once
 
 #include <string>
+#include <time.h>
 #include <vector>
 
 
 // Information to save on every loop
 typedef struct LoopState {
+  struct timespec loop_time;
   long motor_count;
   double motor_pos_r;
   double vel_est_rs;

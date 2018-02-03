@@ -252,6 +252,7 @@ int main(int argc, char *argv[])
     gpioPWM(PWM_PIN, pwm_in);
  
     LoopState state;
+    state.loop_time = curr_time;
     state.motor_count = prev_count;
     state.motor_pos_r = motor_pos_rad;
     state.vel_est_rs = vel_est_rs;

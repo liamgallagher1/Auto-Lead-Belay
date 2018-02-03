@@ -26,11 +26,12 @@ void write_loops_to_file(
     to_string(hour) + string("_") + to_string(min) + string(".csv");
 
   ofstream output_file(full_file_name); //, std::ofstream::out);
-  output_file << "Motor count, pos radians, vel est, accel est, U of t, raw adc, amplified adc\n";
+  output_file << "Time s, time ns, Motor count, pos radians, vel est, accel est, U of t, raw adc, amplified adc\n";
 
   for (unsigned int i = 0; i < history.size(); ++i) {
     LoopState now = history[i];
-    output_file << now.motor_count << ", " << now.motor_pos_r << ", " << 
+    output_file << now.loop_time.tv_sec << ", " << now.loop_time.tv_nsec << ", " << 
+      now.motor_count << ", " << now.motor_pos_r << ", " << 
       now.vel_est_rs << ", " << now.accel_est_rss << ", " << now.u_of_t << ", " << 
       now.raw_adc << ", " << now.amplified_adc << "\n"; 
   }
