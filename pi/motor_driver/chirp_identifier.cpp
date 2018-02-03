@@ -1,10 +1,8 @@
-#include <iostream>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include <vector>
 
 #include <pigpio.h>
 
@@ -15,9 +13,6 @@ extern "C"
 #include "rotary_encoder.h"
 #include "queue.h"
 }
-#include "loop_state.hpp"
-
-using namespace std;
 
 #define DIR_PIN 8
 #define PWM_PIN 25
@@ -26,37 +21,29 @@ using namespace std;
 #define ENCODER_B_PIN 24
 
 // TODO fix pins
+
 #define SPI_PIN  7 // GPIO for slave select.
 #define MISO_PIN 9 // Input 
 #define MOSI_PIN 10 // Output
 #define CLK_PIN  11 // Clock
 
+
 // duty cycle range used by pwm
-#define PWM_RANGE 10000
+#define PWM_RANGE 2000
 // ideal frequency of PWM output in HZ
-#define PWM_FREQ_HZ 4000
+#define PWM_FREQ_HZ 8000
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 4000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 10
+#define RUN_FOR_TIME_SEC 15
 // defines frequency of printout
 #define PRINT_FREQ_HZ 10
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 12
 #define ACCEL_ESTIMATOR_ORDER 10
 
-// Chrip input math
-static double CHIRP_AMP = 0.5;
-static double CHIRP_OFFSET = 0.5;
-static double INIT_FREQ_HZ = 1.0 / 20;
-static double FINAL_FREQ_HZ = 5;
-static int CHIRP_TIME_S = 100;
-// constant defining output rate of change
-// u = A sin(2 * pi * (init_freq * t + K/2 * t^2))
-static double CHIRP_K = (FINAL_FREQ_HZ - INIT_FREQ_HZ) / CHIRP_TIME_S;
-
-// TODO this should go
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
 
 // Quadrature Encoder gets 4 counts per pulse
 static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
@@ -113,49 +100,53 @@ void timespec_diff(
   }
 }
 
+
 int main(int argc, char *argv[])
 {
   if (gpioInitialise() < 0) {
-    cout << "Failed GPIO Init" << endl;
+    printf("Failed GPIO INIT");
     return 1;
   }
   // Encoder state and initalization
   Pi_Renc_t* renc;
   renc = Pi_Renc(ENCODER_A_PIN, ENCODER_B_PIN, callback);
+
   // ADC state and initalization
   // janky until we actually do multiple inputs
   int only_miso_pin = MISO_PIN;
   ADC_Reader* reader = init_adc_reader(SPI_PIN, &only_miso_pin, 1, MOSI_PIN, CLK_PIN);
-  // Configure motor pins to output  
+
+  // Configure pins to output  
   gpioSetMode(DIR_PIN,  PI_OUTPUT);
   gpioSetMode(PWM_PIN, PI_OUTPUT);
  
+  //gpioSetPullUpDown(DIR_PIN, PI_PUD_DOWN);
+  //gpioSetPullUpDown(PWM_PIN, PI_PUD_DOWN);
   // Turn on forward direction
   gpioWrite(DIR_PIN, 0);
 
   // The asked for frequency isn't necessarily the set one
   // because of sample rate considerations
   int real_freq_hz = gpioSetPWMfrequency(PWM_PIN, PWM_FREQ_HZ);
-  cout << "Real PWM Frequency: " << real_freq_hz << endl;
+  printf("Real PWM Frequency: %d\n", real_freq_hz);
 
   // Set range controlling fully on vs fully off behavior
-  int real_range = gpioSetPWMrange(PWM_PIN, PWM_RANGE);
-  cout << "Real pwm range: " <<  real_range << endl;
+  gpioSetPWMrange(PWM_PIN, PWM_RANGE);
 
   // Set PWM output to 50% duty cycle
-  unsigned int half_on = (unsigned int) round(PWM_RANGE * CHIRP_OFFSET);
+  unsigned int half_on = PWM_RANGE / 2;
   int set_pwm = gpioPWM(PWM_PIN, half_on);
-  cout << "Set pwm?: " <<  set_pwm << endl;
+  printf("Set pwm?: %d\n", set_pwm);
 
   double loop_wait_time_sec = (1.0 / SAMPLING_FREQ_HZ);
   long loop_wait_time_nsec = (long) round(loop_wait_time_sec * 1E9);
   long print_loop_freq_iters = (long) round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec));
 
-  cout << "Sampling freq HZ and NSEC: " <<  SAMPLING_FREQ_HZ << "\t"  << loop_wait_time_nsec << endl;
-  cout << "Print freq HZ and num iters: " << PRINT_FREQ_HZ << "\t" << print_loop_freq_iters << endl;
+  printf("Sampling freq HZ and NSEC: %i \t %li \n", SAMPLING_FREQ_HZ, loop_wait_time_nsec);
+  printf("Print freq HZ and num iters: %d \t %li \n", PRINT_FREQ_HZ, print_loop_freq_iters);
 
-  // Chill for a second ?
-  //sleep(1);
+  // Chill for a second
+  sleep(1);
   
   // Use timespec to wait for precise amounts of time
   // Time that we started the prgram after init,
@@ -194,15 +185,10 @@ int main(int argc, char *argv[])
   // And wants the slowest loop time
   long max_inner_loop_time_ns = 0;
 
-  // history
-  vector<LoopState> history;
-  history.reserve((RUN_FOR_TIME_SEC + 1) * SAMPLING_FREQ_HZ); 
-
   // Sampling loop, do for ten seconds
   // TODO better difference operator
   while(curr_loop_time.tv_sec - start_time.tv_sec < RUN_FOR_TIME_SEC) {
     // Get the current motor position in radians
-    long prev_count = main_motor_count;
     motor_pos_rad = main_motor_count * RADS_PER_COUNT;
    
     // TODO occasional numerical conditioning considerations by keeping 
@@ -241,34 +227,13 @@ int main(int argc, char *argv[])
     // Get ADC readings
     last_readings(reader, &raw_adc_reading, &amplified_adc_reading);
 
-    double time_s = (num_iters % (SAMPLING_FREQ_HZ * CHIRP_TIME_S)) / loop_wait_time_sec; 
-    // calculate chirp output
-    float u_of_t = CHIRP_OFFSET + CHIRP_AMP * sin(2 * M_PI * 
-       (INIT_FREQ_HZ * time_s + CHIRP_K * time_s * time_s));  
-    // CLAMP
-    u_of_t = fmin(u_of_t, 1.0);
-    u_of_t = fmax(u_of_t, 0.0);
-    unsigned int pwm_in = (unsigned int) round(u_of_t * PWM_RANGE);
-    gpioPWM(PWM_PIN, pwm_in);
- 
-    LoopState state;
-    state.motor_count = prev_count;
-    state.motor_pos_r = motor_pos_rad;
-    state.vel_est_rs = vel_est_rs;
-    state.accel_est_rss = accel_est_rss;
-    state.u_of_t = pwm_in;
-    state.raw_adc = raw_adc_reading;
-    state.amplified_adc = amplified_adc_reading;
-    history.push_back(state);
 
     num_iters++;
     // Print if its time to do so
     // TODO probably really screws up the timeing on these iterations
     // TODO clock the operation?
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
-        "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
-        "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << pwm_in << endl; 
+      printf("Motor pos: %f\t count: %li\t vel: %f \t accel: %f \t adc_raw: %d \t adc_amp: %d \n", motor_pos_rad, main_motor_count, vel_est_rs, accel_est_rss, raw_adc_reading, amplified_adc_reading);
     }
 
 
@@ -315,11 +280,6 @@ int main(int argc, char *argv[])
   Pi_Renc_cancel(renc);
   free_adc_reader(reader);
   gpioTerminate();
-  cout << "Writing to file? " << (argc == 2) << endl;
-  if (argc == 2) {
-    write_loops_to_file(history, string("chirp_sys_id"));
-  }
-
   return 0;
 }
 
