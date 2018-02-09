@@ -47,6 +47,8 @@ using namespace std;
 #define VEL_ESTIMATOR_ORDER 12
 #define ACCEL_ESTIMATOR_ORDER 10
 
+#define STAMP_SIZE 100
+
 // Chrip input math
 static double CHIRP_AMP = 0.5;
 static double CHIRP_OFFSET = 0.5;
@@ -87,6 +89,10 @@ static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
 
+typedef pair<long, struct timespec> TimeStamp;
+
+deque<TimeStamp> stamps;
+
 
 // Now only use the callback to modify the main motor count
 void callback(int dir)
@@ -96,6 +102,11 @@ void callback(int dir)
   } else {
     main_motor_count--;
   }
+  struct timespec curr_time;
+  clock_gettime(CLOCK_REALTIME, &curr_time);
+  long count = main_motor_count;
+  stamps.push_front(TimeStamp(count, curr_time));
+  stamps.pop_back();
 }
 
 
@@ -105,6 +116,14 @@ int main(int argc, char *argv[])
     cout << "Failed GPIO Init" << endl;
     return 1;
   }
+  // Init staps deque before starting the encoder
+  struct timespec init_time;
+  clock_gettime(CLOCK_REALTIME, &init_time);
+  for (unsigned int i = 0; i < STAMP_SIZE; ++i) {
+    stamps.push_back(TimeStamp(0, init_time));
+    clock_gettime(CLOCK_REALTIME, &init_time);
+  }
+
   // Encoder state and initalization
   Pi_Renc_t* renc;
   renc = Pi_Renc(ENCODER_A_PIN, ENCODER_B_PIN, callback);
@@ -200,7 +219,13 @@ int main(int argc, char *argv[])
    
     // TODO occasional numerical conditioning considerations by keeping 
     // motor position small
-    
+
+    double ls_vel_est_rs;
+    double ls_accel_est_rss;
+
+    estimate_state_stamps(stamps, curr_loop_time, ls_vel_est_rs, ls_accel_est_rss);
+
+
    // Do IIR filter calculatorions
     double vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
@@ -267,6 +292,7 @@ int main(int argc, char *argv[])
       cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
         "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
         "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << pwm_in << endl; 
+      cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
     }
 
     // Loop timing code

@@ -2,7 +2,7 @@ TARGET = sampling_driver driver
 LIBS = -lpthread -lpigpio -lm
 CC = gcc
 CPPC = g++ -std=c++11
-CFLAGS =  -Wall -pthread -O3 #Be sure to use this when it matters
+CFLAGS =  -Wall -pthread # -O3 #Be sure to use this when it matters
 
 .PHONY: default all clean
 
