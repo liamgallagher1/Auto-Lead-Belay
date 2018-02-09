@@ -39,7 +39,7 @@ using namespace std;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 4000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 100
+#define RUN_FOR_TIME_SEC 10
 // defines frequency of printout
 #define PRINT_FREQ_HZ 10
 // Order of the estimator
