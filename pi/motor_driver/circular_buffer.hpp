@@ -12,11 +12,39 @@
 template <class T>
 class CircularBuffer {
 public:
-  CircularBuffer(size_t size);
-	
-  void push(T item);
+  CircularBuffer(size_t size) :
+    buf_(std::unique_ptr<T[]>(new T[size])),
+    size_(size)
+  {
+  }
 
-	T get(void);
+	
+  void push(T item)
+  {
+  //  std::lock_guard<std::mutex> lock(mutex_);
+    buf_[head_] = item;
+    head_ = (head_ + 1) % size_;
+  
+    if(head_ == tail_) {
+      tail_ = (tail_ + 1) % size_;
+    }
+  }
+
+
+	T get(void)
+  {
+  //  std::lock_guard<std::mutex> lock(mutex_);
+
+   if (empty()) {
+     return T();
+   }
+
+   // Read data and advance the tail (we now have a free space)
+   T val = buf_[tail_];
+   tail_ = (tail_ + 1) % size_;
+   return val;
+  }
+
 
   T at(size_t indx);
 

@@ -18,7 +18,7 @@ CircularBuffer<T>::CircularBuffer(size_t size) :
 template <typename T>
 void CircularBuffer<T>::push(T item)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+//  std::lock_guard<std::mutex> lock(mutex_);
 
   buf_[head_] = item;
   head_ = (head_ + 1) % size_;
@@ -31,16 +31,16 @@ void CircularBuffer<T>::push(T item)
 template <typename T>
 T CircularBuffer<T>::at(size_t indx)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+//  std::lock_guard<std::mutex> lock(mutex_);
 
-  return buf_[(head_ + size_ - indx) % size_];
+  return buf_[(head_ + 2 * size_ - 1 - indx) % size_];
 }
 
 
 template <typename T>
 T CircularBuffer<T>::get(void)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+//  std::lock_guard<std::mutex> lock(mutex_);
 
   if (empty()) {
     return T();
@@ -55,7 +55,7 @@ T CircularBuffer<T>::get(void)
 template <typename T>
 void CircularBuffer<T>::reset(void)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+//  std::lock_guard<std::mutex> lock(mutex_);
   head_ = tail_;
 }
 
