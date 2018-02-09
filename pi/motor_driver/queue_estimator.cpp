@@ -24,6 +24,8 @@ typedef pair<long, struct timespec> TimeStamp;
 
 // TODO this should go
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
 
 // TODO make these static ints
 #define DIR_PIN 8
@@ -45,14 +47,17 @@ typedef pair<long, struct timespec> TimeStamp;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 400
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 5 
+#define RUN_FOR_TIME_SEC 30 
+
+#define EXPECTED_STAMPS 10E6
+
 // defines frequency of printout
-#define PRINT_FREQ_HZ 25
+#define PRINT_FREQ_HZ 0
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 12
 #define ACCEL_ESTIMATOR_ORDER 12
 
-#define STAMP_SIZE 100
+#define STAMP_SIZE 1000
 
 // Chrip input math
 //static double CHIRP_AMP = 0.5;
@@ -67,6 +72,10 @@ typedef pair<long, struct timespec> TimeStamp;
 static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
+volatile long num_stamps = 0; // strictly increasing tic count
+
+// True if the callback can modify the timestamp queue
+volatile bool queue_lock_open = false; 
 
 // Quadrature Encoder gets 4 counts per pulse
 //static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
@@ -90,6 +99,10 @@ void callback(int dir)
   } else {
     main_motor_count--;
   }
+  // Only add timestamp if the queue is safe.
+  if (!queue_lock_open) return;
+  num_stamps += 1;
+  // Add timestamps
   struct timespec curr_time;
   clock_gettime(CLOCK_REALTIME, &curr_time);
   long count = main_motor_count;
@@ -176,7 +189,9 @@ int main(int argc, char *argv[])
   // history
   vector<LoopState> history;
   history.reserve((RUN_FOR_TIME_SEC + 1) * SAMPLING_FREQ_HZ); 
-
+  vector<TimeStamp> all_stamps;
+  all_stamps.reserve(EXPECTED_STAMPS);
+  long prev_num_stamps = 0;
 
   // Use timespec to wait for precise amounts of time
   // Time that we started the prgram after init,
@@ -199,8 +214,7 @@ int main(int argc, char *argv[])
   cout << "Going into inner loop " << endl;
   sleep(1);
 
-  // Sampling loop, do for ten seconds
-  // TODO better difference operator
+  queue_lock_open = true;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     // Get the current motor position in radians
     long prev_count = main_motor_count;
@@ -212,8 +226,12 @@ int main(int argc, char *argv[])
     double ls_vel_est_rs;
     double ls_accel_est_rss;
 
+    // close queue lock
+    queue_lock_open = false;
+    // estimate 
     estimate_state_stamps(stamps, curr_loop_time, ls_vel_est_rs, ls_accel_est_rss);
-
+    // open queue lock
+    queue_lock_open = true; 
 
    // Do IIR filter calculatorions
     double vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
@@ -274,6 +292,16 @@ int main(int argc, char *argv[])
     state.amplified_adc = amplified_adc_reading;
     history.push_back(state);
 
+    // Add time stamps to stamp history
+    queue_lock_open = false; 
+    long num_stamps_to_add = num_stamps - prev_num_stamps;   
+    // TODO make safe to more stamps than queue size?
+    for (int i = MIN(num_stamps_to_add, STAMP_SIZE) - 1; i >= 0; --i) {
+      all_stamps.push_back(stamps[i]); 
+    }
+    prev_num_stamps = num_stamps;
+    queue_lock_open = true;
+
     num_iters++;
     // Print if its time to do so
     // TODO clock the operation?
@@ -283,7 +311,7 @@ int main(int argc, char *argv[])
         "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
       cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
     }
-
+    //
     // Loop timing code
     // TODO cut some of this crud
     clock_gettime(CLOCK_REALTIME, &curr_time);
@@ -329,6 +357,8 @@ int main(int argc, char *argv[])
   cout << "Writing to file? " << (argc == 2) << endl;
   if (argc == 2) {
     write_loops_to_file(history, string("chirp_sys_id"));
+  } else if (argc == 3) {
+    write_loops_stamps_to_file(history, all_stamps, string("timestamp_test"));
   }
 
   return 0;
