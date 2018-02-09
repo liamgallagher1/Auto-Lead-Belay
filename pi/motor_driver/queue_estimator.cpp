@@ -15,6 +15,8 @@ extern "C"
 #include "rotary_encoder.h"
 #include "queue.h"
 }
+#include "circular_buffer.hpp"
+#include "circular_buffer.cpp"
 #include "loop_state.hpp"
 #include "time_functions.hpp"
 
@@ -39,7 +41,7 @@ using namespace std;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 4000
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 100
+#define RUN_FOR_TIME_SEC 5 
 // defines frequency of printout
 #define PRINT_FREQ_HZ 10
 // Order of the estimator
@@ -147,18 +149,18 @@ int main(int argc, char *argv[])
 
   int queue_size = MAX(VEL_ESTIMATOR_ORDER, ACCEL_ESTIMATOR_ORDER) + 1;
   // Initalize circular buffer of previous encoding measurements estimates
-  Queue* prev_accel_ests_rss = createQueue(queue_size + 1);
-  Queue* prev_vel_ests_rs =    createQueue(queue_size + 1);
-  Queue* prev_pos_obs_rad =    createQueue(queue_size + 1);
+  CircularBuffer<double> prev_accel_ests_rss(queue_size + 1);
+  CircularBuffer<double>  prev_vel_ests_rs(queue_size + 1);
+  CircularBuffer<double> prev_pos_obs_rad(queue_size + 1);
   
   double motor_pos_rad = main_motor_count * RADS_PER_COUNT;
   int raw_adc_reading;
   int amplified_adc_reading;
   
   for (unsigned int i = 0; i < VEL_ESTIMATOR_ORDER; ++i) {
-    enqueue(prev_vel_ests_rs, 0.0);
-    enqueue(prev_pos_obs_rad, motor_pos_rad);
-    enqueue(prev_accel_ests_rss, 0.0);
+    prev_vel_ests_rs.push(0.0);
+    prev_pos_obs_rad.push(motor_pos_rad);
+    prev_accel_ests_rss.push(0.0);
   }
 
   // What percentage of iterations have extra time to spare?
@@ -197,7 +199,7 @@ int main(int argc, char *argv[])
 
   // Sampling loop, do for ten seconds
   // TODO better difference operator
-  while(!past_time(&curr_loop_time, &finish_time)) {
+  while(!past_time(&curr_loop_time, &finish_time) && num_iters < VEL_ESTIMATOR_ORDER * 2) {
     // Get the current motor position in radians
     long prev_count = main_motor_count;
     motor_pos_rad = main_motor_count * RADS_PER_COUNT;
@@ -210,30 +212,27 @@ int main(int argc, char *argv[])
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
       // double check the sanity of this
       // Handle numerator, or previous position obseration terms
-      vel_est_rs += vel_estimator_b[i] * at(prev_pos_obs_rad, VEL_ESTIMATOR_ORDER - i);
+      cout << "Prev pos, vel: " << prev_pos_obs_rad.at(VEL_ESTIMATOR_ORDER - i) << 
+        ", " << prev_vel_ests_rs.at(VEL_ESTIMATOR_ORDER - i) << endl;
+      vel_est_rs += vel_estimator_b[i] * prev_pos_obs_rad.at(VEL_ESTIMATOR_ORDER - i);
       // Handle denomenator, or previous velocity estimate terms
-      vel_est_rs -= vel_estimator_a[i] * at(prev_vel_ests_rs, VEL_ESTIMATOR_ORDER - i);
+      vel_est_rs -= vel_estimator_a[i] * prev_vel_ests_rs.at(VEL_ESTIMATOR_ORDER - i);
     }
 
     double accel_est_rss = vel_estimator_b[0] * vel_est_rs;
     for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
       // Handle numerator, or previous velocity estimation terms
-      accel_est_rss += vel_estimator_b[i] * at(prev_vel_ests_rs,
-          VEL_ESTIMATOR_ORDER - i);
+      accel_est_rss += vel_estimator_b[i] * 
+        prev_vel_ests_rs.at(VEL_ESTIMATOR_ORDER - i);
       // Handle denomenator, or previous acceleration estimate terms
-      accel_est_rss -= vel_estimator_a[i] * at(prev_accel_ests_rss,
-          VEL_ESTIMATOR_ORDER - i);
+      accel_est_rss -= vel_estimator_a[i] * 
+        prev_accel_ests_rss.at(VEL_ESTIMATOR_ORDER - i);
     }
 
     // Cycle circular queues 
-    dequeue(prev_accel_ests_rss);
-    enqueue(prev_accel_ests_rss, accel_est_rss);
-
-    dequeue(prev_vel_ests_rs);
-    enqueue(prev_vel_ests_rs, vel_est_rs);
-
-    dequeue(prev_pos_obs_rad);
-    enqueue(prev_pos_obs_rad, motor_pos_rad);
+    prev_accel_ests_rss.push(accel_est_rss);
+    prev_vel_ests_rs.push(vel_est_rs);
+    prev_pos_obs_rad.push(motor_pos_rad);
 
     // Get ADC readings
     last_readings(reader, &raw_adc_reading, &amplified_adc_reading);

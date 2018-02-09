@@ -14,9 +14,11 @@ class CircularBuffer {
 public:
   CircularBuffer(size_t size);
 	
-  void put(T item);
+  void push(T item);
 
 	T get(void);
+
+  T at(size_t indx);
 
 	void reset(void);
 
