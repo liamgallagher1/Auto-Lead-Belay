@@ -34,6 +34,9 @@ driver.o: driver.c rotary_encoder.h
 adc_reader.o: adc_reader.c adc_reader.h
 	gcc $(CFLAGS) -c adc_reader.c $(LIBS)
 
+circular_buffer.o: circular_buffer.cpp circular_buffer.hpp
+	$(CPPC) $(CFLAGS) -c circular_buffer.cpp $(LIBS)
+
 loop_state.o: loop_state.cpp loop_state.hpp
 	$(CPPC) $(CFLAGS) -c loop_state.cpp $(LIBS)
 
