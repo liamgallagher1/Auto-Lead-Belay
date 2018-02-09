@@ -13,6 +13,7 @@ using namespace Eigen;
 // size of least squares problem
 #define LS_ORDER 3
 #define LS_TIMES 5
+#define SIGMA 3 // skip into queue
 #define CPR 8196
 
 
@@ -73,24 +74,42 @@ void estimate_state_stamps(
     double& vel_estimate_rs,
     double& accel_estimate_rss)
 {
+  // pull timestamps into a vector, from oldest to newest.
+  std::vector<TimeStamp> save_times;
+  for (int i = LS_TIMES - 1; i >= 0; --i) {
+    save_times.push_back(stamps[SIGMA * i]); 
+  }
+
   // Scale the times to be between 0 and 1 for better numerics
-  struct timespec oldest = stamps[LS_TIMES - 1].second;
-  struct timespec newest = stamps[0].second;
+  struct timespec oldest = save_times[0].second;
+  struct timespec newest = save_times.back().second;
   double time_diff_s = (newest.tv_sec - oldest.tv_sec) 
            + 10E-9 * (newest.tv_nsec - oldest.tv_nsec);
+  ////cout << "Time diff: " << time_diff_s << endl;
   long c0 = stamps[0].first;
 
   LSMat ls_prob; 
   LSVec counts;
 
-  // Setup LS matrices
+  // Pull timestamps quickly since its being modified live
   struct timespec now;
   for (unsigned int i = 0; i < LS_TIMES; ++i) {
-    now = stamps[i].second;
-    double time = 
+    TimeStamp data_point = save_times[i];
+    now = data_point.second;
+    long count = data_point.first;
+    double time_s = 
               ((now.tv_sec -  oldest.tv_sec) 
-    + 10E-9 * (now.tv_nsec - oldest.tv_nsec)) / time_diff_s;
-    double time_pow = 1;
+    + 10E-9 * (now.tv_nsec - oldest.tv_nsec));
+    double time_n = time_s / time_diff_s;
+    ls_prob(i, 1) = time_n; 
+    counts(i) = count - c0;
+    //cout << time_s << ", " << time_n << endl;
+  }
+
+  // Setup LS matrices
+  for (unsigned int i = 0; i < LS_TIMES; ++i) {
+    double time = ls_prob(i, 1); 
+    double time_pow = 1.0;
     long count = stamps[i].first;
     counts(i) = count - c0;
     for (unsigned int j = 0; j < LS_ORDER; ++j) {
@@ -98,6 +117,7 @@ void estimate_state_stamps(
       time_pow *= time;
     }
   }
+  //cout << ls_prob(0, 1) << ", " << ls_prob(1, 1) << ", " << ls_prob(2, 1) << ", " << ls_prob(3, 1) << ", " << ls_prob(4, 1) << endl;
 
   // Solve for the bestfit polynomial
   PolyVec poly = 
@@ -110,13 +130,15 @@ void estimate_state_stamps(
     first_der(i) = i * poly(i); 
     second_der(i) = (i - 1) * first_der(i);
   }
+  //cout << " Sol and dervs :\n" << poly << "\nder:\n" << first_der << " " << second_der << endl;
 
   // Calculate normalized estimates at the most current time
   double time = 
               ((curr_time.tv_sec -  oldest.tv_sec) 
     + 10E-9 * (curr_time.tv_nsec - oldest.tv_nsec)) / time_diff_s;
-  double time_pow = 1.0;
+  //cout << "curr time normalized: " << time << endl;
 
+  double time_pow = 1.0;
   double vel_normalized = 0;
   double accel_normalized = 0;
   for (unsigned int i = 1; i < LS_ORDER - 1; ++i) {

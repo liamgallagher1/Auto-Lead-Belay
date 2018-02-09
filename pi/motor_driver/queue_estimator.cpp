@@ -20,7 +20,12 @@ extern "C"
 #include "time_functions.hpp"
 
 using namespace std;
+typedef pair<long, struct timespec> TimeStamp;
 
+// TODO this should go
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+// TODO make these static ints
 #define DIR_PIN 8
 #define PWM_PIN 25
 
@@ -38,58 +43,41 @@ using namespace std;
 // ideal frequency of PWM output in HZ
 #define PWM_FREQ_HZ 4000
 // frequency the count is quieried
-#define SAMPLING_FREQ_HZ 100
+#define SAMPLING_FREQ_HZ 400
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 2 
+#define RUN_FOR_TIME_SEC 5 
 // defines frequency of printout
-#define PRINT_FREQ_HZ 100
+#define PRINT_FREQ_HZ 25
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 12
-#define ACCEL_ESTIMATOR_ORDER 10
+#define ACCEL_ESTIMATOR_ORDER 12
 
 #define STAMP_SIZE 100
 
 // Chrip input math
-static double CHIRP_AMP = 0.5;
-static double CHIRP_OFFSET = 0.5;
-static double INIT_FREQ_HZ = 1.0 / 20;
-static double FINAL_FREQ_HZ = 5;
-static int CHIRP_TIME_S = 100;
-// constant defining output rate of change
-// u = A sin(2 * pi * (init_freq * t + K/2 * t^2))
-static double CHIRP_K = (FINAL_FREQ_HZ - INIT_FREQ_HZ) / CHIRP_TIME_S;
-
-// TODO this should go
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
-// Quadrature Encoder gets 4 counts per pulse
-static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
-
-// Velocity filter parameters, numerator and denomenator terms of IIR filter
-// implicit a_1 = 1.0 filter term included unecessarily 
-static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
-  41.4895856544645, -370.492408422197, 1473.26031862357, -3424.09533031117, 5126.02498600793, -5126.02498600793, 
-  3424.09533031117, -1473.26031862357, 370.492408422196, -41.4895856544644
-};
-
-static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
-  1, -7.62789647849086, 25.3113840106525, -47.5666759564674, 55.0255254778286, -39.5730525988382, 
-  16.6342418997334, -3.17748822853527, -0.139626741142248, 0.113588615291234
-};
-
-static double accel_estimator_b[ACCEL_ESTIMATOR_ORDER] = {
-  9.3759, -75.3733, 276.0036, -605.9827,  881.1613, -881.1613,  605.9827, -276.0036, 75.3733,  -9.3759
-};
-
-static double accel_estimator_a[ACCEL_ESTIMATOR_ORDER] = {
-    1.0000, -6.9395, 20.9819, -35.9672, 37.9638, -24.8748, 9.4597, -1.5716, -0.1093, 0.0570
-};
+//static double CHIRP_AMP = 0.5;
+//static double CHIRP_OFFSET = 0.5;
+//static double INIT_FREQ_HZ = 1.0 / 20;
+//static double FINAL_FREQ_HZ = 5;
+//static int CHIRP_TIME_S = 100;
+//// constant defining output rate of change
+//// u = A sin(2 * pi * (init_freq * t + K/2 * t^2))
+//static double CHIRP_K = (FINAL_FREQ_HZ - INIT_FREQ_HZ) / CHIRP_TIME_S;
 
 static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Motor count modified by ISR
 volatile long main_motor_count = 0; // tics
 
-typedef pair<long, struct timespec> TimeStamp;
+// Quadrature Encoder gets 4 counts per pulse
+//static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
+
+// Velocity filter parameters, numerator and denomenator terms of IIR filter
+// implicit a_1 = 1.0 filter term included unecessarily 
+static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {10.8461504255582835, 81.1030730130927395, 272.9234344526789187, 525.6988523841208689, 588.0540389024703245, 265.0195444939001845, -265.0195444938997298, -588.0540389024702108, -525.6988523841210963, -272.9234344526791460, -81.1030730130928390, -10.8461504255583066};
+static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269093261977787, 3.8656338982226441, 4.1979951010234302, 3.4829663001525146, 2.1622123064639736, 1.0287161148702080, 0.3659673399003901, 0.0945796157097693, 0.0166274246141348, 0.0017503155540260, 0.0000804475152427};
+
+static double accel_estimator_b[VEL_ESTIMATOR_ORDER] = {10.8461504255582835, 81.1030730130927395, 272.9234344526789187, 525.6988523841208689, 588.0540389024703245, 265.0195444939001845, -265.0195444938997298, -588.0540389024702108, -525.6988523841210963, -272.9234344526791460, -81.1030730130928390, -10.8461504255583066};
+static double accel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269093261977787, 3.8656338982226441, 4.1979951010234302, 3.4829663001525146, 2.1622123064639736, 1.0287161148702080, 0.3659673399003901, 0.0945796157097693, 0.0166274246141348, 0.0017503155540260, 0.0000804475152427};
 
 deque<TimeStamp> stamps;
 
@@ -148,7 +136,7 @@ int main(int argc, char *argv[])
   cout << "Real pwm range: " <<  real_range << endl;
 
   // Set PWM output to 50% duty cycle
-  unsigned int half_on = (unsigned int) round(PWM_RANGE * CHIRP_OFFSET);
+  //unsigned int half_on = (unsigned int) round(PWM_RANGE * CHIRP_OFFSET);
   //int set_pwm = gpioPWM(PWM_PIN, half_on);
   //cout << "Set pwm?: " <<  set_pwm << endl;
   int set_pwm;
@@ -201,7 +189,8 @@ int main(int argc, char *argv[])
   struct timespec curr_time, time_diff;
   // Time to start next loop. Always add to it the proper number of nanoseconds.
   struct timespec next_loop_time;  
-  
+ 
+  clock_gettime(CLOCK_REALTIME, &curr_time);
   clock_gettime(CLOCK_REALTIME, &start_time);
   add_time(&start_time, RUN_FOR_TIME_SEC, 0, &finish_time);
   clock_gettime(CLOCK_REALTIME, &curr_loop_time);
@@ -239,12 +228,12 @@ int main(int argc, char *argv[])
     }
 
     double accel_est_rss = vel_estimator_b[0] * vel_est_rs;
-    for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
+    for (unsigned int i = 1; i < ACCEL_ESTIMATOR_ORDER; ++i) {
       // Handle numerator, or previous velocity estimation terms
-      accel_est_rss += vel_estimator_b[i - 1] * 
+      accel_est_rss += accel_estimator_b[i - 1] * 
         prev_vel_ests_rs[i - 1];
       // Handle denomenator, or previous acceleration estimate terms
-      accel_est_rss -= vel_estimator_a[i - 1] * 
+      accel_est_rss -= accel_estimator_a[i - 1] * 
         prev_accel_ests_rss[i - 1];
     }
 
@@ -263,15 +252,15 @@ int main(int argc, char *argv[])
     last_readings(reader, &raw_adc_reading, &amplified_adc_reading);
 
     // Calculate and execute output.
-    double time_s = (num_iters % (SAMPLING_FREQ_HZ * CHIRP_TIME_S)) / loop_wait_time_sec; 
-    // calculate chirp output
-    float u_of_t = CHIRP_OFFSET + CHIRP_AMP * sin(2 * M_PI * 
-       (INIT_FREQ_HZ * time_s + CHIRP_K * time_s * time_s));  
-    // CLAMP
-    u_of_t = fmin(u_of_t, 1.0);
-    u_of_t = fmax(u_of_t, 0.0);
-    unsigned int pwm_in = (unsigned int) round(u_of_t * PWM_RANGE);
-    gpioPWM(PWM_PIN, pwm_in);
+    //double time_s = (num_iters % (SAMPLING_FREQ_HZ * CHIRP_TIME_S)) / loop_wait_time_sec; 
+    //// calculate chirp output
+    //float u_of_t = CHIRP_OFFSET + CHIRP_AMP * sin(2 * M_PI * 
+    //   (INIT_FREQ_HZ * time_s + CHIRP_K * time_s * time_s));  
+    //// CLAMP
+    //u_of_t = fmin(u_of_t, 1.0);
+    //u_of_t = fmax(u_of_t, 0.0);
+    //unsigned int pwm_in = (unsigned int) round(u_of_t * PWM_RANGE);
+    //gpioPWM(PWM_PIN, pwm_in);
  
     // Record the current state
     LoopState state;
@@ -280,7 +269,7 @@ int main(int argc, char *argv[])
     state.motor_pos_r = motor_pos_rad;
     state.vel_est_rs = vel_est_rs;
     state.accel_est_rss = accel_est_rss;
-    state.u_of_t = pwm_in;
+    //state.u_of_t = pwm_in;
     state.raw_adc = raw_adc_reading;
     state.amplified_adc = amplified_adc_reading;
     history.push_back(state);
@@ -291,7 +280,7 @@ int main(int argc, char *argv[])
     if ((num_iters % print_loop_freq_iters) == 0) {
       cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
         "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
-        "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << pwm_in << endl; 
+        "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
       cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
     }
 
