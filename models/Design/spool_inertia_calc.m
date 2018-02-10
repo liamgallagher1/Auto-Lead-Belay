@@ -1,4 +1,4 @@
-function [J_spool, m_spool, max_r] = spool_inertia_calc(r2, r1, l, material)
+function [J_spool, m_spool, max_r, num_stacks] = spool_inertia_calc(r2, r1, l, material)
 % Calculates the mass moment of inertia and mass of spool. 
 % TODO add materials
 
@@ -35,11 +35,11 @@ while (length_remaining > 0)
     new_length_remaining = max(length_remaining - length_of_stack, 0);
     length_of_stack = length_remaining - new_length_remaining; 
     length_remaining = new_length_remaining;
-    r_curr = r_curr + D; 
     
     % I = sum r^2 dm
     m_stack = rho_rope * length_of_stack;
-    rope_inertia = rope_inertia + r_curr^2 * m_stack;
+    rope_inertia = rope_inertia + r_curr^2 * m_stack; 
+    r_curr = r_curr + D; 
 end
 
 max_r = r_curr - D/2;
