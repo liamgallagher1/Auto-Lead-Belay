@@ -6,10 +6,11 @@ function [bending_stress, hoop_stress, torsional_shear] = ...
 
 %% Assumed forces, pressures, torsions
 
-F_max = 5000; % [N] Static
+F_max = 8500; % [N] Static
+N = 1; % number of rope wraps
 
-rope_diam = 0.001; % [m] 
-P_max = F_max / (pi * 2 * r2 * rope_diam); % [Pa]
+rope_diam = 0.01; % [m] 
+P_max = F_max / (pi * 2 * r2 * N * rope_diam); % [Pa]
 
 [~, ~, max_r] = spool_inertia_calc(r2, r1, length, material);
 T_max = 3.16 * 10^3 * max_r; % Max torque from expected forces
@@ -33,5 +34,6 @@ hoop_stress = (r2^2 + r1^2) / (r2^2 - r1^2) * P_max;
 J = pi / 2 * (r2^4 - r1^4); 
 torsional_shear = T_max * r2 / J; 
 
+% TODO shear calculations but not really it won't shear.
 end
 

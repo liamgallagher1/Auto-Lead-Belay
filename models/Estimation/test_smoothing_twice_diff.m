@@ -1,8 +1,8 @@
-%clear;
-%close all
-%clf
+clear;
+close all
+clf
 
-%Ts = 0.00025;
+Ts = 0.001;
 sample_freq_hz = 1 / Ts;
 
 PPR = 2048;
@@ -19,15 +19,19 @@ counts = tics(time, velocity_profile_rs, PPR);
 % corresponding radial position observations from counts
 theta_obs_rad = 2 * pi / (4 * PPR) * counts;
 
-% Get velocity estimate from position signal
-[vel_filt_rs, Zf] = filter(b_filt_vel_i{1}, a_filt_vel_i{1}, theta_obs_rad);
-b_filt_vel_i{1}
-a_filt_vel_i{1}
-% Get acceleration from filtered velocity
-[a_filt_rss, Zff] = filter(b_filt_ii_vel{1}, a_filt_ii_vel{1}, vel_filt_rs);
+[pos_fit, goodness, out] = fit(time', theta_obs_rad,'smoothingspline', 'SmoothingParam', 0.99995);
+[breaks,coefs,l,k,d] = unmkpp(pos_fit.p);
+dpp = mkpp(breaks,repmat(k-1:-1:1,d*l,1).*coefs(:,1:k-1),d);
+vel_spline_est = ppval(dpp, time);
+
+[breaks,coefs,l,k,d] = unmkpp(dpp);
+ddpp = mkpp(breaks,repmat(k-1:-1:1,d*l,1).*coefs(:,1:k-1),d);
+accel_spline_est = ppval(ddpp, time);
+
+
 
 subplot(2, 1, 1);
-plot(time, vel_filt_rs);
+plot(time, vel_spline_est);
 hold on;
 plot(time, velocity_profile_rs);
 xlabel('Time [s]');
@@ -37,7 +41,7 @@ legend('Filtered Velocity Estimate',...
 
     
 subplot(2, 1, 2);
-plot(time, a_filt_rss);
+plot(time, accel_spline_est);
 hold on;
 plot([0, 0.4999, 0.50001, 1], 2 * max_speed_rs * [1, 1, -1, -1]);
 ylim([-10, 10]);
