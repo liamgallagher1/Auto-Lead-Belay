@@ -7,6 +7,8 @@
 
 #include <eigen3/Eigen/Dense>
 
+#include "circular_buffer.hpp"
+
 using namespace std;
 using namespace Eigen;
 
@@ -69,7 +71,7 @@ typedef Eigen::Matrix<double, LS_TIMES, 1> LSVec;
 typedef Eigen::Matrix<double, LS_ORDER, 1> PolyVec;
 
 void estimate_state_stamps(
-    const std::deque<TimeStamp>& stamps,
+    const CircularBuffer<TimeStamp>& stamps,
     struct timespec& curr_time,
     double& vel_estimate_rs,
     double& accel_estimate_rss)

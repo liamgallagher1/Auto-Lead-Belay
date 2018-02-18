@@ -46,7 +46,7 @@ simple_driver.o: simple_driver.c
 simple_reader.o: simple_reader.c
 	gcc $(CFLAGS) -c simple_reader.c $(LIBS)
 
-queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h time_functions.hpp loop_state.hpp
+queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h time_functions.hpp loop_state.hpp circular_buffer.hpp
 		$(CPPC)  $(CFLAGS) -c queue_estimator.cpp $(LIBS)
 
 clean:

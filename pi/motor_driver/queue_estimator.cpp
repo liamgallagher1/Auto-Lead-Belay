@@ -9,13 +9,14 @@
 
 #include <pigpio.h>
 
-// All of my defined source is in C
+// source is in C
 extern "C"
 {
 #include "adc_reader.h"
 #include "rotary_encoder.h"
 #include "queue.h"
 }
+#include "circular_buffer.hpp"
 #include "loop_state.hpp"
 #include "time_functions.hpp"
 
@@ -75,7 +76,7 @@ volatile long main_motor_count = 0; // tics
 volatile long num_stamps = 0; // strictly increasing tic count
 
 // True if the callback can modify the timestamp queue
-volatile bool queue_lock_open = false; 
+volatile bool queue_open = false; 
 
 // Quadrature Encoder gets 4 counts per pulse
 //static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
@@ -88,7 +89,8 @@ static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269
 static double accel_estimator_b[VEL_ESTIMATOR_ORDER] = {10.8461504255582835, 81.1030730130927395, 272.9234344526789187, 525.6988523841208689, 588.0540389024703245, 265.0195444939001845, -265.0195444938997298, -588.0540389024702108, -525.6988523841210963, -272.9234344526791460, -81.1030730130928390, -10.8461504255583066};
 static double accel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269093261977787, 3.8656338982226441, 4.1979951010234302, 3.4829663001525146, 2.1622123064639736, 1.0287161148702080, 0.3659673399003901, 0.0945796157097693, 0.0166274246141348, 0.0017503155540260, 0.0000804475152427};
 
-deque<TimeStamp> stamps;
+//deque<TimeStamp> stamps;
+CircularBuffer<TimeStamp> stamps;
 
 
 // Now only use the callback to modify the main motor count
@@ -100,7 +102,7 @@ void callback(int dir)
     main_motor_count--;
   }
   // Only add timestamp if the queue is safe.
-  if (!queue_lock_open) return;
+  if (!queue_open) return;
   num_stamps += 1;
   // Add timestamps
   struct timespec curr_time;
@@ -121,7 +123,7 @@ int main(int argc, char *argv[])
   struct timespec init_time;
   clock_gettime(CLOCK_REALTIME, &init_time);
   for (unsigned int i = 0; i < STAMP_SIZE; ++i) {
-    stamps.push_back(TimeStamp(0, init_time));
+    stamps.push_front(TimeStamp(0, init_time));
     clock_gettime(CLOCK_REALTIME, &init_time);
   }
 
@@ -177,6 +179,9 @@ int main(int argc, char *argv[])
   deque<double> prev_vel_ests_rs(queue_size, 0.0);
   deque<double> prev_pos_obs_rad(queue_size, motor_pos_rad);
   
+  CircularBuffer<double> test_buff(queue_size); 
+  
+  //
    // What percentage of iterations have extra time to spare?
   // Want it to be 99.9999 or so
   double num_iters_with_time = 0;
@@ -214,7 +219,7 @@ int main(int argc, char *argv[])
   cout << "Going into inner loop " << endl;
   sleep(1);
 
-  queue_lock_open = true;
+  queue_open = true;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     // Get the current motor position in radians
     long prev_count = main_motor_count;
@@ -227,11 +232,11 @@ int main(int argc, char *argv[])
     double ls_accel_est_rss;
 
     // close queue lock
-    queue_lock_open = false;
+    queue_open = false;
     // estimate 
     estimate_state_stamps(stamps, curr_loop_time, ls_vel_est_rs, ls_accel_est_rss);
     // open queue lock
-    queue_lock_open = true; 
+    queue_open = true; 
 
    // Do IIR filter calculatorions
     double vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
@@ -293,14 +298,14 @@ int main(int argc, char *argv[])
     history.push_back(state);
 
     // Add time stamps to stamp history
-    queue_lock_open = false; 
+    queue_open = false; 
     long num_stamps_to_add = num_stamps - prev_num_stamps;   
     // TODO make safe to more stamps than queue size?
     for (int i = MIN(num_stamps_to_add, STAMP_SIZE) - 1; i >= 0; --i) {
       all_stamps.push_back(stamps[i]); 
     }
     prev_num_stamps = num_stamps;
-    queue_lock_open = true;
+    queue_open = true;
 
     num_iters++;
     // Print if its time to do so
