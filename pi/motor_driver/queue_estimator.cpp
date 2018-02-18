@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
   Pi_Renc_cancel(renc);
   free_adc_reader(reader);
   gpioTerminate();
-  cout << "Writing to file? " << (argc == 2) << endl;
+  cout << "Writing to file? " << (argc == 2 || argc == 3) << endl;
   if (argc == 2) {
     write_loops_to_file(history, string("chirp_sys_id"));
   } else if (argc == 3) {
