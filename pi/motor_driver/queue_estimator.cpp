@@ -48,7 +48,7 @@ typedef pair<long, struct timespec> TimeStamp;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 400
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 30 
+#define RUN_FOR_TIME_SEC 15 
 
 #define EXPECTED_STAMPS 10E6
 
