@@ -4,7 +4,7 @@ clf;
 
 omega_weight = 0; % 100; %100;
 alpha_weight = 0; % 0.1;
-jerk_weight =  5 * 10^-6; % 5 * 10^-15; %5 * 10^-35;
+jerk_weight =  5 * 10^-5; % 5 * 10^-15; %5 * 10^-35;
 
 % Load 'time', 'theta_t', 'omega_t', 'alpha_t'
 load('x_v_a_guess.mat');
@@ -29,7 +29,7 @@ ses_omega = zeros(length(time), 1);
 ses_alpha = zeros(length(time), 1);
 ses_jerk  = zeros(length(time), 1); 
 
-order = 4;
+order = 5;
 num_counts = 40;
 sigma = 1;
 
@@ -47,7 +47,11 @@ for i = start_indx:1:length(time)
     stamp_buffer = time_stamps(stamp_indx - start_indx : stamp_indx);
     count_buffer = counts(stamp_indx - start_indx : stamp_indx);
     
+    
     omega_prior = 0; %omega_fil(i - 1);% + Ts * alpha_fil(i - 1);
+    if (isnan(omega_prior) || isinf(omega_prior))
+        omega_prior = 0;
+    end
     alpha_prior = 0; %alpha_fil(i - 1);
    
 %     [theta_hat, omega_hat, alpha_hat, sse_pos, se_omega, se_alpha] =...
