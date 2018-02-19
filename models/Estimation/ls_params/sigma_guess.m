@@ -1,13 +1,24 @@
 clear;
 
 Ts = 0.0005;
-filename = '../../../pi/motor_driver/logs/timestamp_test39_17_12.csv';
 
-time_len = (1146444 / 12);
+% Test with avery
+%filename = '../../../pi/motor_driver/logs/timestamp_test39_17_12.csv';
+
+% First test without std deque
+%filename = '../../../pi/motor_driver/logs/timestamp_test48_16_15.csv';
+filename = '../../../pi/motor_driver/logs/new_stamptest_clean.csv';
+
+%time_len = (1146444 / 12);
+%time_len =  (1838100 / 12);
+time_len = 153175;
 
 
 % Load data
-A = csvread(filename, 2, 0, [2 0, 5, time_len -2]);
+%A = csvread(filename, 2, 0);%, 2, 0, [2 0, 3, time_len - 2]);
+%A = csvread(filename, 2, 0, [2 0, 2, time_len - 2]);
+A = csvread(filename); %, 0, 0, [0, 0, 0, time_len - 20]); 
+A = [A(1:time_len)'; A(time_len+1:2*time_len)'; A(2 * time_len + 1:end)'];
 % pull time stamps
 stamps_s = A(1, 1:end-1);
 stamps_ns = A(2, 1:end-1); 
@@ -57,10 +68,13 @@ time = min(breaks):Ts:max(breaks);
 theta_t = ppval(theta_hat, time);
 omega_t = ppval(omega_hat, time);
 alpha_t = ppval(alpha_hat, time);
-save('x_v_a_guess.mat', 'time', 'theta_t', 'omega_t', 'alpha_t');
+%save('x_v_a_circ_buff_guess.mat', 'time', 'theta_t', 'omega_t', 'alpha_t');
+load('x_v_a_circ_buff_guess.mat');
 
 % Evaluate the estimate at the corresponding points.
 subplot(3, 1, 1); 
+plot(time_stamps, counts * 2 * pi / CPR, 'gx'); 
+hold on;
 plot(time, theta_t);
 xlabel('Time [s]');
 ylabel('Theta. Estimate [rad]');
@@ -74,6 +88,10 @@ subplot(3, 1, 3);
 plot(time, alpha_t);
 xlabel('Time [s]');
 ylabel('Accel. Estimate [rad/s^2]');
+
+
+dt = diff(time);
+dc = diff(theta_t);
 
 
 
