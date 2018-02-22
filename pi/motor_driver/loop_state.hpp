@@ -4,7 +4,9 @@
 #include <time.h>
 #include <vector>
 
-typedef std::pair<long, struct timespec> TimeStamp;
+#include "rotary_encoder.hpp"
+
+//typedef std::pair<long, uint32_t> TimeStamp;
 
 //#include <eigen3/Eigen/Dense>
 
