@@ -86,6 +86,8 @@ static void _cb(int gpio, int level, uint32_t tick, void *user)
        (renc->main_motor_count--);
      }
    }
+    renc->stamps_us->push_front(TimeStamp(renc->main_motor_count, tick));
+    renc->stamps_us->pop_back();
   }
 }
 
@@ -98,7 +100,9 @@ Pi_Renc_t* Pi_Renc(int gpioA, int gpioB, int stamp_buffer_size)
   renc->levA=0;
   renc->levB=0;
   renc->lastGpio = -1;
+  renc->main_motor_count = 0;
   renc->stamps_us = new CircularBuffer<TimeStamp>(stamp_buffer_size);
+  
 
   // TODO init the stamp buffer with the current time?
   

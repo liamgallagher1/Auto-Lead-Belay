@@ -21,7 +21,9 @@
 
 typedef struct LoopState {
   struct timespec loop_time;
+  struct timespec prev_loop_comp_time;
   long motor_count;
+  
   double motor_pos_r;
   double vel_est_rs;
   double accel_est_rss;

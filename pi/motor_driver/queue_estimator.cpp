@@ -52,7 +52,7 @@ using namespace std;
 #define EXPECTED_STAMPS 10E6
 
 // defines frequency of printout
-#define PRINT_FREQ_HZ 0
+#define PRINT_FREQ_HZ 5
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 12
 #define ACCEL_ESTIMATOR_ORDER 12
@@ -70,24 +70,11 @@ using namespace std;
 //static double CHIRP_K = (FINAL_FREQ_HZ - INIT_FREQ_HZ) / CHIRP_TIME_S;
 
 static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
-// Motor count modified by ISR
-//volatile long main_motor_count = 0; // tics
-long num_stamps = 0; // strictly increasing tic count
-//volatile bool queue_open = false; 
 
 // Quadrature Encoder gets 4 counts per pulse
 //static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
 
-// Velocity filter parameters, numerator and denomenator terms of IIR filter
-// implicit a_1 = 1.0 filter term included unecessarily 
-static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {10.8461504255582835, 81.1030730130927395, 272.9234344526789187, 525.6988523841208689, 588.0540389024703245, 265.0195444939001845, -265.0195444938997298, -588.0540389024702108, -525.6988523841210963, -272.9234344526791460, -81.1030730130928390, -10.8461504255583066};
-static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269093261977787, 3.8656338982226441, 4.1979951010234302, 3.4829663001525146, 2.1622123064639736, 1.0287161148702080, 0.3659673399003901, 0.0945796157097693, 0.0166274246141348, 0.0017503155540260, 0.0000804475152427};
-
-static double accel_estimator_b[VEL_ESTIMATOR_ORDER] = {10.8461504255582835, 81.1030730130927395, 272.9234344526789187, 525.6988523841208689, 588.0540389024703245, 265.0195444939001845, -265.0195444938997298, -588.0540389024702108, -525.6988523841210963, -272.9234344526791460, -81.1030730130928390, -10.8461504255583066};
-static double accel_estimator_a[VEL_ESTIMATOR_ORDER] = {1.0000000000000000, 2.3269093261977787, 3.8656338982226441, 4.1979951010234302, 3.4829663001525146, 2.1622123064639736, 1.0287161148702080, 0.3659673399003901, 0.0945796157097693, 0.0166274246141348, 0.0017503155540260, 0.0000804475152427};
-
 CircularBuffer<TimeStamp> stamps;
-
 
 int main(int argc, char *argv[])
 {
@@ -146,23 +133,14 @@ int main(int argc, char *argv[])
   double motor_pos_rad = renc->main_motor_count * RADS_PER_COUNT;
   int raw_adc_reading;
   int amplified_adc_reading;
-
-  int queue_size = MAX(VEL_ESTIMATOR_ORDER, ACCEL_ESTIMATOR_ORDER) + 1;
-  // Initalize circular buffer of previous encoding measurements estimates
-  deque<double> prev_accel_ests_rss(queue_size, 0.0);
-  deque<double> prev_vel_ests_rs(queue_size, 0.0);
-  deque<double> prev_pos_obs_rad(queue_size, motor_pos_rad);
   
-  CircularBuffer<double> test_buff(queue_size); 
-  
-  //
-   // What percentage of iterations have extra time to spare?
+  // What percentage of iterations have extra time to spare?
   // Want it to be 99.9999 or so
   double num_iters_with_time = 0;
   // How much time has been spend doing the work in the loop, 
   // not waiting
   long long total_inner_loop_time_ns = 0;
-  // And wants the slowest loop time
+  // And what is the slowest loop time
   long max_inner_loop_time_ns = 0;
 
   // history
@@ -170,6 +148,7 @@ int main(int argc, char *argv[])
   history.reserve((RUN_FOR_TIME_SEC + 1) * SAMPLING_FREQ_HZ); 
   vector<TimeStamp> all_stamps;
   all_stamps.reserve(EXPECTED_STAMPS);
+  long num_stamps = 0;
   long prev_num_stamps = 0;
 
   // Use timespec to wait for precise amounts of time
@@ -201,46 +180,10 @@ int main(int argc, char *argv[])
     // TODO occasional numerical conditioning considerations by keeping 
     // motor position small
 
-    double ls_vel_est_rs;
-    double ls_accel_est_rss;
-
     // close queue lock
     // estimate 
     // estimate_state_stamps(stamps, curr_loop_time, ls_vel_est_rs, ls_accel_est_rss);
     // open queue lock
-
-   // Do IIR filter calculatorions
-    double vel_est_rs = vel_estimator_b[0] * motor_pos_rad;
-    for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
-      // double check the sanity of this
-      // Handle numerator, or previous position obseration terms
-      //cout << "Prev pos, vel: " << prev_pos_obs_rad.at(VEL_ESTIMATOR_ORDER - i) << 
-      //  ", " << prev_vel_ests_rs.at(VEL_ESTIMATOR_ORDER - i) << endl;
-      vel_est_rs += vel_estimator_b[i] * prev_pos_obs_rad[i - 1];
-      // Handle denomenator, or previous velocity estimate terms
-      vel_est_rs -= vel_estimator_a[i] * prev_vel_ests_rs[i - 1];
-    }
-
-    double accel_est_rss = vel_estimator_b[0] * vel_est_rs;
-    for (unsigned int i = 1; i < ACCEL_ESTIMATOR_ORDER; ++i) {
-      // Handle numerator, or previous velocity estimation terms
-      accel_est_rss += accel_estimator_b[i - 1] * 
-        prev_vel_ests_rs[i - 1];
-      // Handle denomenator, or previous acceleration estimate terms
-      accel_est_rss -= accel_estimator_a[i - 1] * 
-        prev_accel_ests_rss[i - 1];
-    }
-
-    // Cycle circular queues 
-    prev_accel_ests_rss.pop_back();
-    prev_accel_ests_rss.push_front(accel_est_rss);
-
-    prev_vel_ests_rs.pop_back();
-    prev_vel_ests_rs.push_front(vel_est_rs);
-
-    prev_pos_obs_rad.pop_back();
-    prev_pos_obs_rad.push_front(motor_pos_rad);
-
 
     // Get ADC readings
     last_readings(reader, &raw_adc_reading, &amplified_adc_reading);
@@ -259,10 +202,11 @@ int main(int argc, char *argv[])
     // Record the current state
     LoopState state;
     state.loop_time = curr_time;
+    state.prev_loop_comp_time = time_diff;
     state.motor_count = prev_count;
     state.motor_pos_r = motor_pos_rad;
-    state.vel_est_rs = vel_est_rs;
-    state.accel_est_rss = accel_est_rss;
+//    state.vel_est_rs = vel_est_rs;
+//    state.accel_est_rss = accel_est_rss;
     //state.u_of_t = pwm_in;
     state.raw_adc = raw_adc_reading;
     state.amplified_adc = amplified_adc_reading;
@@ -270,6 +214,7 @@ int main(int argc, char *argv[])
 
     // TODO check sanity
     // Add time stamps to stamp history
+    num_stamps = renc->stamps_us->add_count(); 
     long num_stamps_to_add = num_stamps - prev_num_stamps;   
     // TODO make safe to more stamps than queue size?
     for (int i = MIN(num_stamps_to_add, STAMP_SIZE) - 1; i >= 0; --i) {
@@ -281,12 +226,10 @@ int main(int argc, char *argv[])
     // Print if its time to do so
     // TODO clock the operation?
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
-        "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
-        "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
-      cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
-    }
-    //
+      cout << "Motor pos: " << motor_pos_rad << endl; 
+      //cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
+    }    
+
     // Loop timing code
     // TODO cut some of this crud
     clock_gettime(CLOCK_REALTIME, &curr_time);
