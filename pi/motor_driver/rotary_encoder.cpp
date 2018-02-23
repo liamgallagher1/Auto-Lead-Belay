@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <utility>
@@ -86,6 +87,7 @@ static void _cb(int gpio, int level, uint32_t tick, void *user)
        (renc->main_motor_count--);
      }
    }
+    
     renc->stamps_us->push_front(TimeStamp(renc->main_motor_count, tick));
     renc->stamps_us->pop_back();
   }

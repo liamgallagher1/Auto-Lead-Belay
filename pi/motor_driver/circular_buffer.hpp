@@ -70,6 +70,7 @@ public:
   // No safety check on validity of indx
   T operator[] (int indx) const
   {
+
     // TODO I only think this is right
     int buf_indx = (head_ - 1 + size_ - indx) % size_;
     return buf_[buf_indx];
@@ -103,6 +104,7 @@ public:
   // TODO make real
   size_t num_elements(void) const 
   {
+
     if (full()) return space();
     if (empty()) return 0; 
     return head_ - 1;
@@ -110,6 +112,7 @@ public:
 
   long add_count(void) const
   {
+
     return add_count_;
   }
 

@@ -1,0 +1,60 @@
+/usr/include/c++/5/bits/c++0x_warning.h|32 col 2 error| #error This file requires compiler and library support for the ISO C++ 2011 standard. This support must be enabled with the -std=c++11 or -std=gnu++11 compiler options.
+circular_buffer.hpp|129 col 8 error| 'mutex' in namespace 'std' does not name a type
+circular_buffer.hpp|130 col 8 error| 'unique_ptr' in namespace 'std' does not name a template type
+circular_buffer.hpp|131 col 18 warning| non-static data member initializers only available with -std=c++11 or -std=gnu++11
+circular_buffer.hpp|132 col 18 warning| non-static data member initializers only available with -std=c++11 or -std=gnu++11
+circular_buffer.hpp|133 col 21 warning| non-static data member initializers only available with -std=c++11 or -std=gnu++11
+circular_buffer.hpp|26 col 5 error| class 'CircularBuffer<T>' does not have any field named 'buf_'
+circular_buffer.hpp|26 col 10 error| 'unique_ptr' is not a member of 'std'
+circular_buffer.hpp|26 col 27 error| expected primary-expression before '[' token
+circular_buffer.hpp|26 col 28 error| expected primary-expression before ']' token
+circular_buffer.hpp|32 col 4 error| class 'CircularBuffer<T>' does not have any field named 'buf_'
+circular_buffer.hpp|32 col 9 error| 'unique_ptr' is not a member of 'std'
+circular_buffer.hpp|32 col 26 error| expected primary-expression before '[' token
+circular_buffer.hpp|32 col 27 error| expected primary-expression before ']' token
+circular_buffer.hpp|41 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|41 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|41 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|41 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|41 col 43 error| note: (if you use '-fpermissive', G++ will accept your code, but allowing the use of an undeclared name is deprecated)
+circular_buffer.hpp|43 col 4 error| 'buf_' was not declared in this scope
+circular_buffer.hpp|55 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|55 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|55 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|55 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|63 col 9 error| 'val' does not name a type
+circular_buffer.hpp|66 col 11 error| 'val' was not declared in this scope
+circular_buffer.hpp|73 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|73 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|73 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|73 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|77 col 12 error| 'buf_' was not declared in this scope
+circular_buffer.hpp|82 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|82 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|82 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|82 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|89 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|89 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|89 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|89 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|97 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|97 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|97 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|97 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|105 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|105 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|105 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|105 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|114 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|114 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|114 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|114 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+circular_buffer.hpp|123 col 4 error| 'lock_guard' is not a member of 'std'
+circular_buffer.hpp|123 col 20 error| 'mutex' is not a member of 'std'
+circular_buffer.hpp|123 col 37 error| 'mutex_' was not declared in this scope
+circular_buffer.hpp|123 col 43 error| there are no arguments to 'lock' that depend on a template parameter, so a declaration of 'lock' must be available [-fpermissive]
+queue_estimator.cpp|93 col 21 error| request for member 'push_front' in 'renc->_Pi_Renc_s::stamps_us', which is of pointer type 'CircularBuffer<std::pair<long int, unsigned int> >*' (maybe you meant to use '->' ?)
+queue_estimator.cpp|224 col 69 error| 'stamps' was not declared in this scope
+queue_estimator.cpp|226 col 46 error| no matching function for call to 'std::vector<std::pair<long int, unsigned int> >::push_back(CircularBuffer<std::pair<long int, unsigned int> >&)'
+/usr/include/c++/5/bits/stl_vector.h|913 col 7 error| note: candidate: void std::vector<_Tp, _Alloc>::push_back(const value_type&) [with _Tp = std::pair<long int, unsigned int>; _Alloc = std::allocator<std::pair<long int, unsigned int> >; std::vector<_Tp, _Alloc>::value_type = std::pair<long int, unsigned int>]
+/usr/include/c++/5/bits/stl_vector.h|913 col 7 error| note:   no known conversion for argument 1 from 'CircularBuffer<std::pair<long int, unsigned int> >' to 'const value_type& {aka const std::pair<long int, unsigned int>&}'

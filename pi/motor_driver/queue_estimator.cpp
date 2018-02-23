@@ -74,7 +74,6 @@ static double RADS_PER_COUNT = 2.0 * M_PI / 4 / PULSES_PER_REVOLUTION;
 // Quadrature Encoder gets 4 counts per pulse
 //static int COUNTS_PER_REVOLUTION = 4 * PULSES_PER_REVOLUTION;
 
-CircularBuffer<TimeStamp> stamps;
 
 int main(int argc, char *argv[])
 {
@@ -83,15 +82,18 @@ int main(int argc, char *argv[])
     return 1;
   }
   
-  // TODO unclear if this is still wise
-  // Init staps deque before starting the encoder
-  for (unsigned int i = 0; i < STAMP_SIZE; ++i) {
-    stamps.push_front(TimeStamp(0, 0));
-  }
+  
 
   // Encoder state and initalization
   Pi_Renc_t* renc;
   renc = Pi_Renc(ENCODER_A_PIN, ENCODER_B_PIN, STAMP_SIZE);
+  // TODO unclear if this is still wise
+  // Init staps deque before starting the encoder
+  for (unsigned int i = 0; i < STAMP_SIZE; ++i) {
+    renc->stamps_us->push_front(TimeStamp(0, 0));
+  }
+  
+  //
   // ADC state and initalization
   // janky until we actually do multiple inputs
   int only_miso_pin = MISO_PIN;
@@ -218,7 +220,7 @@ int main(int argc, char *argv[])
     long num_stamps_to_add = num_stamps - prev_num_stamps;   
     // TODO make safe to more stamps than queue size?
     for (int i = MIN(num_stamps_to_add, STAMP_SIZE) - 1; i >= 0; --i) {
-      all_stamps.push_back(stamps[i]); 
+      all_stamps.push_back((*renc->stamps_us)[i]); 
     }
     prev_num_stamps = num_stamps;
 
