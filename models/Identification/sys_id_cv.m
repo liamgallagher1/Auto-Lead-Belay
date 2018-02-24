@@ -21,5 +21,3 @@ duty_cycle = A(:, 7);
 raw_adc = A(:, 8);
 amplified_adc = A(:, 9);
 
-[Z, 
-
