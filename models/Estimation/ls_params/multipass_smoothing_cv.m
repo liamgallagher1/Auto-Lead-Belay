@@ -1,10 +1,15 @@
 clear;
 
-filename = '../../../pi/motor_driver/logs/timestamp_test39_17_12.csv';
+% Old avery test
+%filename = '../../../pi/motor_driver/logs/timestamp_test39_17_12.csv';
+%time_len = (1146444 / 12);
+%A = csvread(filename, 2, 0, [2 0, 5, time_len -2]);
 
-time_len = (1146444 / 12);
+% Better test with true ISR
+filename = '../../../pi/motor_driver/logs/timestamp_test48_17_48.csv';
+A = csvread(filename, 2, 0);
 
-A = csvread(filename, 2, 0, [2 0, 5, time_len -2]);
+
 % pull time stamps
 stamps_s = A(1, 1:end-1);
 stamps_ns = A(2, 1:end-1); 
@@ -18,7 +23,7 @@ counts = counts(times_to_keep);
 
 %num_segments = 40;
 num_segments = 20;
-num_folds = length(times);
+num_folds = 5; %length(times);
 
 in_test  = (num_folds - 1) * floor(length(times) / num_folds);
 
@@ -34,11 +39,12 @@ in_test  = (num_folds - 1) * floor(length(times) / num_folds);
 %smoothness_params = [0.999, 0.9993, 0.9999, 0.99993, 0.99999, 0.999993];
 %smoothness_params = logspace(log(0.99999), log(0.9999999), 10);
 % therefore
-smoothness_params = 0.9999947;
+%smoothness_params = 0.9999947;
 
+% JK new test
+smoothness_params = [0.9999999, 0.99999995, 0.99999999, 0.999999995];
 SEs = zeros(length(smoothness_params), num_folds);
 ABs = zeros(length(smoothness_params), num_folds);
-
 
 
 for i = 1:length(smoothness_params)
@@ -84,8 +90,8 @@ for i = 1:length(smoothness_params)
         sse = error_diff * error_diff';
         ave_se = sse / length(count_est);
         ave_e = sum(abs(error_diff)) / length(count_est);
-        SEs(i, j) = ave_se;
-        ABs(i, j) = ave_e; 
+        SEs(i, j) = ave_se
+        ABs(i, j) = ave_e 
 
         % Go from 3rd order coefficents to 2nd order velocity
         first_derv_mat = [3, 0, 0; 0, 2, 0; 0, 0, 1; 0, 0, 0];
@@ -109,8 +115,7 @@ for i = 1:length(smoothness_params)
     end
 end
 
-
-save('smoothness_cv2.mat', 'SEs', 'ABs', 'smoothness_params');
+save('smoothness_cv_higher_isr_5.mat', 'SEs', 'ABs', 'smoothness_params');
 
 
 

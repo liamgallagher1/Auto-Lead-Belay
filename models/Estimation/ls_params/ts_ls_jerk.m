@@ -2,19 +2,24 @@ clear;
 close all;
 clf;
 
+order = 3;
+num_counts = 50;
+sigma = 1;
+
 omega_weight = 0; % 100; %100;
 alpha_weight = 0; % 0.1;
-jerk_weight =  5 * 10^-6; % 5 * 10^-15; %5 * 10^-35;
+jerk_weight = 0; % 5*10^-2; %5 * 10^-6; % 5 * 10^-15; %5 * 10^-35;
 
 % Load 'time', 'theta_t', 'omega_t', 'alpha_t'
-load('x_v_a_guess.mat');
+load('x_v_a_48_17_48.mat');
+%load('x_v_a_guess.mat');
 % Load time_stamps, counts
-load('time_stamps_avery.mat');
+%load('time_stamps_avery.mat');
+load('48_17_stamping.mat');
+
 
 % Make the time start from zero seconds
 time_stamps = time_stamps - time(1);
-counts = counts(mod(1:length(time_stamps), 5) == 0);
-time_stamps = time_stamps(mod(1:length(time_stamps), 5) == 0);
 
 time = time - time(1);
 Ts = time(2) - time(1);
@@ -29,9 +34,7 @@ ses_omega = zeros(length(time), 1);
 ses_alpha = zeros(length(time), 1);
 ses_jerk  = zeros(length(time), 1); 
 
-order = 4;
-num_counts = 40;
-sigma = 1;
+
 
 
 % Do a simple test. 
@@ -47,7 +50,7 @@ for i = start_indx:1:length(time)
     stamp_buffer = time_stamps(stamp_indx - start_indx : stamp_indx);
     count_buffer = counts(stamp_indx - start_indx : stamp_indx);
     
-    omega_prior = 0; %omega_fil(i - 1);% + Ts * alpha_fil(i - 1);
+    omega_prior = omega_fil(i - 1);% + Ts * alpha_fil(i - 1);
     alpha_prior = 0; %alpha_fil(i - 1);
    
 %     [theta_hat, omega_hat, alpha_hat, sse_pos, se_omega, se_alpha] =...
@@ -95,7 +98,7 @@ hold on;
 plot(time, theta_fil);
 hold on;
 plot(time, theta_t);
-ylim([0, 1.5 * max(theta_t)]);
+ylim([1.5 * min(theta_t), 0]);
 xlim(x_range); 
 xlabel('Time [s]');
 ylabel('Theta [rad]');
