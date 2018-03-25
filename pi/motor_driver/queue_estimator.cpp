@@ -27,7 +27,6 @@ typedef pair<long, struct timespec> TimeStamp;
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-
 // TODO make these static ints
 #define DIR_PIN 8
 #define PWM_PIN 25
@@ -36,10 +35,11 @@ typedef pair<long, struct timespec> TimeStamp;
 #define ENCODER_B_PIN 24
 
 // TODO fix pins
-#define SPI_PIN  7 // GPIO for slave select.
-#define MISO_PIN 9 // Input 
-#define MOSI_PIN 10 // Output
-#define CLK_PIN  11 // Clock
+#define SPI_PIN    19 // GPIO for slave select.
+#define MISO_PIN   6 // Input 
+#define MOSI_PIN   26 // Output
+#define MISO_PIN_2 21 // 6
+#define CLK_PIN    5 // Clock
 
 // duty cycle range used by pwm
 #define PWM_RANGE 10000
@@ -53,7 +53,7 @@ typedef pair<long, struct timespec> TimeStamp;
 #define EXPECTED_STAMPS 10E6
 
 // defines frequency of printout
-#define PRINT_FREQ_HZ 0
+#define PRINT_FREQ_HZ 5
 // Order of the estimator
 #define VEL_ESTIMATOR_ORDER 12
 #define ACCEL_ESTIMATOR_ORDER 12
@@ -311,10 +311,11 @@ int main(int argc, char *argv[])
     // Print if its time to do so
     // TODO clock the operation?
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
-        "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
-        "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
-      cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
+      // cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
+      //  "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
+      //  "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
+      cout << "ADC readings: " << raw_adc_reading << ", \t" << amplified_adc_reading << endl;
+      // cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
     }
     //
     // Loop timing code

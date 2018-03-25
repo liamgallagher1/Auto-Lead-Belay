@@ -58,5 +58,5 @@ void free_adc_reader(
 // TODO might currently add a delay
 void last_readings(
   ADC_Reader* reader,
-  int* raw_reading,
-  int* amplified_reading);
+  int* channel_0,
+  int* channel_1);

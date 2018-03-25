@@ -14,7 +14,7 @@ static int B0 = 17;             // Bit position of data bit B0
 
 // Reading every number of microseconds
 // Leads to 1000 Hz sampling
-static int REPEAT_MICROS = 100; 
+static int REPEAT_MICROS = 50; 
 
 struct ADC_Reader* init_adc_reader(
     int slave_select_pin,
@@ -65,15 +65,15 @@ struct ADC_Reader* init_adc_reader(
    */
   // Construct multiple SPI READS, alternating input source
   char buff[2];
-  buff[0] = 0xC0; // Single Ended, Channel 0
-  buff[1] = 0xE0; // Single Ended, Channel 1
+  buff[0] = 0xCF; // Single Ended, Channel 0
+  buff[1] = 0xEF; // Single Ended, Channel 1
  
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 3, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 8, BX, B0, B0);
     } else {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 3, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 8, BX, B0, B0);
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
@@ -117,7 +117,7 @@ struct ADC_Reader* init_adc_reader(
    * true in this particular example).                        
    */
   // TODO understand what this float means.                                                       
-  float cbs_per_reading = (float)rwi.numCB / (float)BUFFER;
+  float cbs_per_reading = floor((float)rwi.numCB / (float)BUFFER);
   reader->cbs_per_reading = cbs_per_reading;
   printf("# cbs=%d per read=%.1f base=%d\n",
       rwi.numCB, cbs_per_reading, botCB);
@@ -174,8 +174,8 @@ void get_reading(
 
 void last_readings(
   ADC_Reader* reader,
-  int* raw_reading,
-  int* amplified_reading)
+  int* channel_0,
+  int* channel_1)
 {
   // Control block for current reading
   int cb = rawWaveCB() - reader->rwi.botCB;  
@@ -200,16 +200,17 @@ void last_readings(
   OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
   // Black magic that may or may not work
   get_reading(reader, OOL, 2, BITS, rx);
-  // Pull the values from that 
+  // Pull the values from that
   int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
  
+  int is_cha_0 = (OOL / BITS + 1) % 2;  
   // Currently just use the lesser one to be non amplified
-  if (val1 < val2) {
-    *raw_reading = val1;
-    *amplified_reading = val2;
+  if (is_cha_0) {
+    *channel_0 = val1;
+    *channel_1 = val2;
   } else {
-    *raw_reading = val2;
-    *amplified_reading = val1;
+    *channel_0  = val2;
+    *channel_1= val1;
   }
   return;
 }
