@@ -16,6 +16,7 @@ static int B0 = 17;             // Bit position of data bit B0
 // Leads to 1000 Hz sampling
 static int REPEAT_MICROS = 50; 
 
+// Constructs an adc reader structure for all pins
 struct ADC_Reader* init_adc_reader(
     int slave_select_pin,
     int* miso_pins,
@@ -65,15 +66,15 @@ struct ADC_Reader* init_adc_reader(
    */
   // Construct multiple SPI READS, alternating input source
   char buff[2];
-  buff[0] = 0xCF; // Single Ended, Channel 0
-  buff[1] = 0xEF; // Single Ended, Channel 1
+  buff[0] = 0xC0; // Single Ended, Channel 0
+  buff[1] = 0xE0; // Single Ended, Channel 1
  
   for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 8, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 4, BX, B0, B0);
     } else {
-      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 8, BX, B0, B0);
+      rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[1], 4, BX, B0, B0);
     }
     // Wait for longer than the time to transmit the message?
     offset += REPEAT_MICROS;
@@ -106,22 +107,23 @@ struct ADC_Reader* init_adc_reader(
   printf("# cb %d-%d ool %d-%d del=%d ncb=%d nb=%d nt=%d\n",
       rwi.botCB, rwi.topCB, rwi.botOOL, rwi.topOOL, rwi.deleted,
       rwi.numCB,  rwi.numBOOL,  rwi.numTOOL);
+
   /**
    * CBs are allocated from the bottom up.  As the wave is being
    * transmitted the current CB will be between botCB and topCB
    * inclusive.
    */
   int botCB = rwi.botCB;
-   /**
+  
+  /**
    * Assume each reading uses the same number of CBs (which is
    * true in this particular example).                        
    */
-  // TODO understand what this float means.                                                       
-  float cbs_per_reading = floor((float)rwi.numCB / (float)BUFFER);
+  // previos implementation used a float but it felt wrong. 
+  int cbs_per_reading = (int) floor((float)rwi.numCB / (float)BUFFER);
   reader->cbs_per_reading = cbs_per_reading;
-  printf("# cbs=%d per read=%.1f base=%d\n",
+  printf("# cbs=%d per read=%d base=%d\n",
       rwi.numCB, cbs_per_reading, botCB);
-
 
   /**
   * OOL are allocated from the top down. There are BITS bits
@@ -163,9 +165,10 @@ void get_reading(
 
   for (int i = 0; i < bits; i++) {
     level = rawWaveGetOut(p);
-    // TODO understand this
-    int a = 0; // This can go unless we use more adcs
-    putBitInBytes(i, buf+(bytes*a), level & (1<<(reader->miso_pins[0])));
+    for (int input = 0; input < reader->num_inputs; ++input) {
+      // TODO understand this
+      putBitInBytes(i, buf+(bytes*input), level & (1<<(reader->miso_pins[input])));
+    }
     p--;
   }
 }
@@ -186,32 +189,36 @@ void last_readings(
   now_reading = (now_reading + BUFFER - 2) % BUFFER;
   // Raw data to output readings too 
   char rx[8];
-
   // get reading from either CH1 or CH2
   int OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
+  int is_cha_0 = (OOL / BITS + 1) % 2;  
+  
   // Black magic that may or may not work
   get_reading(reader, OOL, 2, BITS, rx);
-  int i = 0;
   // Pull the values from that
-  int val1 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
-  
-  // now get reading from the other one 
+  for (unsigned int input = 0; input < reader->num_inputs; ++input) {
+    int val = (rx[input*2]<<4) + (rx[(input*2)+1]>>4);
+    if (is_cha_0) {
+      channel_0[input] = val;
+    } else {
+      channel_1[input] = val;
+    }
+  }
+
+  // now get reading from the other channel 
   now_reading++;
   OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
   // Black magic that may or may not work
   get_reading(reader, OOL, 2, BITS, rx);
-  // Pull the values from that
-  int val2 = (rx[i*2]<<4) + (rx[(i*2)+1]>>4);
  
-  int is_cha_0 = (OOL / BITS + 1) % 2;  
-  // Currently just use the lesser one to be non amplified
-  if (is_cha_0) {
-    *channel_0 = val1;
-    *channel_1 = val2;
-  } else {
-    *channel_0  = val2;
-    *channel_1= val1;
+  // Pull vales and put to output
+  for (unsigned int input = 0; input < reader->num_inputs; ++input) {
+    int val = (rx[input*2]<<4) + (rx[(input*2)+1]>>4);
+    if (is_cha_0) {
+      channel_1[input] = val;
+    } else {
+      channel_0[input] = val;
+    }
   }
-  return;
 }
 

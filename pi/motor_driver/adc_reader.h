@@ -32,8 +32,7 @@ typedef struct ADC_Reader {
   // This state was copied from the old implementation.
   // I don't understand it or like their style.
   int topOOL;
-  // Why do I do this though
-  float cbs_per_reading;
+  int cbs_per_reading;
 } ADC_Reader;
 
 

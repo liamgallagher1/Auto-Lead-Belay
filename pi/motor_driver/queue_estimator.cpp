@@ -132,8 +132,8 @@ int main(int argc, char *argv[])
   renc = Pi_Renc(ENCODER_A_PIN, ENCODER_B_PIN, callback);
   // ADC state and initalization
   // janky until we actually do multiple inputs
-  int only_miso_pin = MISO_PIN;
-  ADC_Reader* reader = init_adc_reader(SPI_PIN, &only_miso_pin, 1, MOSI_PIN, CLK_PIN);
+  int only_miso_pin[] = {MISO_PIN, MISO_PIN_2};
+  ADC_Reader* reader = init_adc_reader(SPI_PIN, only_miso_pin, 2, MOSI_PIN, CLK_PIN);
   // Configure motor pins to output  
   gpioSetMode(DIR_PIN,  PI_OUTPUT);
   gpioSetMode(PWM_PIN, PI_OUTPUT);
@@ -170,8 +170,8 @@ int main(int argc, char *argv[])
   long num_iters = 0;
 
   double motor_pos_rad = main_motor_count * RADS_PER_COUNT;
-  int raw_adc_reading;
-  int amplified_adc_reading;
+  int raw_adc_reading[2];
+  int amplified_adc_reading[2];
 
   int queue_size = MAX(VEL_ESTIMATOR_ORDER, ACCEL_ESTIMATOR_ORDER) + 1;
   // Initalize circular buffer of previous encoding measurements estimates
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
 
 
     // Get ADC readings
-    last_readings(reader, &raw_adc_reading, &amplified_adc_reading);
+    last_readings(reader, raw_adc_reading, amplified_adc_reading);
 
     // Calculate and execute output.
     //double time_s = (num_iters % (SAMPLING_FREQ_HZ * CHIRP_TIME_S)) / loop_wait_time_sec; 
@@ -293,8 +293,8 @@ int main(int argc, char *argv[])
     state.vel_est_rs = vel_est_rs;
     state.accel_est_rss = accel_est_rss;
     //state.u_of_t = pwm_in;
-    state.raw_adc = raw_adc_reading;
-    state.amplified_adc = amplified_adc_reading;
+    state.raw_adc = raw_adc_reading[0];
+    state.amplified_adc = amplified_adc_reading[0];
     history.push_back(state);
 
     // Add time stamps to stamp history
@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
       // cout << "Motor pos: " << motor_pos_rad << "\t vel: " << vel_est_rs << 
       //  "\t accel: " << accel_est_rss << "\t adc_raw: " << raw_adc_reading << 
       //  "\t amped_reading: " << amplified_adc_reading << "\t pwm in: " << endl; //<< pwm_in << endl; 
-      cout << "ADC readings: " << raw_adc_reading << ", \t" << amplified_adc_reading << endl;
+      cout << "ADC readings: " << raw_adc_reading[0] << ", \t" << amplified_adc_reading[0] << "\t\t" << raw_adc_reading[1] << ",\t" << amplified_adc_reading[1] << endl;
       // cout << "Est: " << ls_vel_est_rs << ", " << ls_accel_est_rss << endl;
     }
     //
