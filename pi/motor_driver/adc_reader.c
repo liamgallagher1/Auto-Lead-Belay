@@ -184,7 +184,8 @@ void last_readings(
   int cb = rawWaveCB() - reader->rwi.botCB;  
  
   // Which "reading #" is this?
-  int now_reading = (int) round((float) cb / reader->cbs_per_reading);
+  int now_reading = cb / reader->cbs_per_reading;
+
   // Go to two readings previous, I think
   now_reading = (now_reading + BUFFER - 2) % BUFFER;
   // Raw data to output readings too 
@@ -206,7 +207,7 @@ void last_readings(
   }
 
   // now get reading from the other channel 
-  now_reading++;
+  now_reading = (now_reading + 1) % BUFFER;
   OOL = reader->topOOL - ((now_reading % BUFFER) * BITS) - 1;
   // Black magic that may or may not work
   get_reading(reader, OOL, 2, BITS, rx);
