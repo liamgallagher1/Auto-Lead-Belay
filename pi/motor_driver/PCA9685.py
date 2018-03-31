@@ -66,10 +66,15 @@ class PWM:
       self._write_reg(self._MODE1, self._AI | self._ALLCALL)
       self._write_reg(self._MODE2, self._OCH | self._OUTDRV)
 
+      print self._AI | self._ALLCALL
+      print self._OCH | self._OUTDRV
+
       time.sleep(0.0005)
 
       mode = self._read_reg(self._MODE1)
       self._write_reg(self._MODE1, mode & ~self._SLEEP)
+
+      print mode & ~self._SLEEP
 
       time.sleep(0.0005)
 
@@ -101,6 +106,11 @@ class PWM:
       time.sleep(0.0005)
 
       self._write_reg(self._MODE1, mode | self._RESTART)
+      print "freq"
+      print (mode & ~self._SLEEP) | self._SLEEP
+      print prescale
+      print mode
+      print mode | self._RESTART
 
       self._frequency = (25000000.0 / 4096.0) / (prescale + 1)
       self._pulse_width = (1000000.0 / self._frequency)
@@ -128,7 +138,7 @@ class PWM:
       else:
          self.pi.i2c_write_i2c_block_data(self.h, self._ALL_LED_ON_L,
             [on & 0xFF, on >> 8, off & 0xFF, off >> 8])
-
+         print [on & 0xFF, on >> 8, off & 0xFF, off >> 8]
    def set_pulse_width(self, channel, width):
 
       "Sets the pulse width for a channel.  Use -1 for all channels."
@@ -162,15 +172,13 @@ if __name__ == "__main__":
 
    pwm = PCA9685.PWM(pi) # defaults to bus 1, address 0x40
 
-   pwm.set_frequency(50) # suitable for servos
+   pwm.set_frequency(10000);
+   pwm.set_duty_cycle(-1, 60)
+   time.sleep(5)
 
-   for dc in range(5, 11):
-       pwm.set_duty_cycle(-1, dc) # -1 for all channels
-       time.sleep(1)
-
-   for pw in range(1000, 2050, 50):
-       pwm.set_pulse_width(-1, pw) # -1 for all channels
-       time.sleep(1)
+   #for dc in range(5, 11):
+   #    pwm.set_duty_cycle(-1, dc) # -1 for all channels
+   #    time.sleep(1)
 
    pwm.cancel()
 
