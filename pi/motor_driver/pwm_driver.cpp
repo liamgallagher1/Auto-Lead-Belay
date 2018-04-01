@@ -23,7 +23,7 @@ PwmDriver::PwmDriver(
   i2cWriteByteData(_i2c_handle, _MODE2, _OCH | _OUTDRV);
 
 
-  std::chrono::nanoseconds timespan(500);
+  std::chrono::nanoseconds timespan(5000);
   std::this_thread::sleep_for(timespan);
 
   int mode = i2cReadByteData(_i2c_handle, _MODE1);
@@ -33,9 +33,6 @@ PwmDriver::PwmDriver(
  
   set_duty_cycle(-1, 0);
   set_frequency_hz(frequency_hz);
-
-  cout << (_AI | _ALLCALL) << ", " << (_OCH | _OUTDRV) << ", " <<
-    (mode & ~_SLEEP) << endl;
 }
 
 
@@ -58,14 +55,12 @@ void PwmDriver::set_frequency_hz(double freq_hz)
   i2cWriteByteData(_i2c_handle, _PRESCALE, prescale);
   i2cWriteByteData(_i2c_handle, _MODE1, mode);
 
-  std::chrono::nanoseconds timespan(500);
+  std::chrono::nanoseconds timespan(5000);
   std::this_thread::sleep_for(timespan);
   
   i2cWriteByteData(_i2c_handle, _MODE1, mode | _RESTART);
 
   this->_frequency_hz = (25000000.0 / 4096.0) / (prescale + 1);
-  cout << "freq: " << ((mode & ~_SLEEP) | _SLEEP) << ", " << prescale << ", " << mode << ", " << (mode | _RESTART) << "\t" << _frequency_hz << endl;
-
 }
 
 void PwmDriver::set_duty_cycle(int16_t channel, double percent)
@@ -74,7 +69,6 @@ void PwmDriver::set_duty_cycle(int16_t channel, double percent)
 
   uint16_t steps = static_cast<uint16_t>(round(percent * (4096.0 / 100.0)));
 
-  cout << " steps: " << steps << endl;
   int on, off = 0;
   if (steps < 0) {
     on = 0;
@@ -92,17 +86,14 @@ void PwmDriver::set_duty_cycle(int16_t channel, double percent)
   buff[2] = off & 0xFF;
   buff[3] = off >> 8;
 
-  cout << "buff: " << ((int) buff[0] )<< "," << ((int) buff[1]) << ", " << ((int) buff[2]) << ", " <<( (int) buff[3] )<< endl;
-
   int i2c_led_channel;
   if (channel >= 0 && channel <= 15) {
     i2c_led_channel = _LED0_ON_L + 4 * channel;
-    std::cout << "duty cycle write: " << i2cWriteBlockData(_i2c_handle, i2c_led_channel, buff, 4) << std::endl;
+    i2cWriteBlockData(_i2c_handle, i2c_led_channel, buff, 4);
   } else {
     i2c_led_channel = _ALL_LED_ON_L;
-    std::cout << "duty cycle write: " << i2cWriteBlockData(_i2c_handle, i2c_led_channel, buff, 4) << std::endl;
+    i2cWriteBlockData(_i2c_handle, i2c_led_channel, buff, 4);
   }
-  cout << "channel: " << channel << ", " << i2c_led_channel << endl;
 }
 
 void PwmDriver::cancel(void)
