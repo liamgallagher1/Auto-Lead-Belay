@@ -39,7 +39,7 @@ extern "C"
 #define LIN_ACT_DIR 6
 #define LIN_ACT_FREQ 4000
 #define LIN_ACT_RANGE 50
-#define LIN_ACT_ADC_MISO 11
+#define LIN_ACT_ADC_MISO 10
 
 // ADC
 #define ADC_CS 19
@@ -166,14 +166,14 @@ int main(int argc, char *argv[])
 
   init_encoders();
 
-  int miso_pins[3] = {LIN_ACT_ADC_MISO, 1, 1};
+  int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_1_MISO, MOTOR_2_MISO};
   int channel_0[3] = {-1, -1, -1};
   int channel_1[3] = {-1, -1, -1};
 
   adc_reader = init_adc_reader(
     ADC_CS,
     miso_pins,
-    1,
+    3,
     ADC_MOSI,
     ADC_CLK,
     1); // non reapeating adc reader
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
   int motor_1_dir = 0;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     num_iters++;
-    if (num_iters % 400 == 0) {
+    if (num_iters % 4000 == 0) {
       gpioWrite(MOTOR_1_DIR, !motor_1_dir);
       gpioWrite(MOTOR_2_DIR, !motor_1_dir);
       gpioWrite(LIN_ACT_DIR, !motor_1_dir);
@@ -239,9 +239,10 @@ int main(int argc, char *argv[])
 
     // Print if its time to do so
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "Count 1 and 2: "  << encoder_count_1 << "\t " << encoder_count_2 << endl;
-
-      cout << "ADC: " << channel_0[0] << ", " << channel_1[0] << endl;
+      cout << "\nCounts:"  << encoder_count_1 << "\t " << encoder_count_2 << "\nADC1:\t" <<
+            channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
+            channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
+            channel_0[2] << "\t" << channel_1[2] << endl;
 
     }
     if ((num_iters % adc_loop_freq_iters) == 0) {
