@@ -12,10 +12,12 @@ extern "C"
 {
 #include "rotary_encoder.h"
 }
+#include "adc_reader.hpp"
 #include "time_functions.hpp"
 
-#define SAMPLING_FREQ_HZ 400
-#define PRINT_FREQ_HZ 0
+#define SAMPLING_FREQ_HZ 400 
+#define ADC_FREQ_HZ 400 // must be less than or equal
+#define PRINT_FREQ_HZ 5
 #define RUN_FOR_TIME_SEC 60
 
 // The big motor
@@ -23,24 +25,53 @@ extern "C"
 #define MOTOR_1_DIR 15
 #define MOTOR_1_FREQ 10000
 #define MOTOR_1_RANGE 1000000
+#define MOTOR_1_MISO 11
 
 // The small motor
 #define MOTOR_2_PWM 22
 #define MOTOR_2_DIR 23
 #define MOTOR_2_FREQ  4000
 #define MOTOR_2_RANGE 50
+#define MOTOR_2_MISO 9
 
 // The linear actuator
-#define LIN_ACT_PWM 26
-#define LIN_ACT_DIR 19
+#define LIN_ACT_PWM 13
+#define LIN_ACT_DIR 6
 #define LIN_ACT_FREQ 4000
 #define LIN_ACT_RANGE 50
+#define LIN_ACT_ADC_MISO 11
 
+// ADC
+#define ADC_CS 19
+#define ADC_MOSI 26
+#define ADC_CLK 5
+
+// Encoders
+#define ENCODER_1_A 16
+#define ENCODER_1_B 12
+#define ENCODER_1_X 7
+
+#define ENCODER_2_A 8
+#define ENCODER_2_B 25
+#define ENCODER_2_X 24
+
+// Resistors
+#define BOARD_2_R1 100000.0  // Nominal Resistor Values, worth identifing.
+#define BOARD_2_R2 470000.0
+
+
+volatile long encoder_count_1 = 0;
+volatile long encoder_count_2 = 0;
+
+Pi_Renc_t* rot_encoder_1;
+Pi_Renc_t* rot_encoder_2;
+
+ADC_Reader* adc_reader;
 
 // Returns 0 if okay
-int init_pwm(void)
+int init_motors(void)
 {
-  int motor_1_pwm = gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
+  int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
   gpioSetMode(MOTOR_1_DIR, PI_OUTPUT);
   gpioWrite(MOTOR_1_DIR, 1); 
 
@@ -61,6 +92,32 @@ int init_pwm(void)
         lin_act_freq && lin_act_range && lin_act_pwm;
 }
 
+// Simple Encoder Callback
+// Timestamping also an option
+// This should all be C++
+void encoder_callback_1(int dir)
+{
+  encoder_count_1 += dir;
+}
+
+void encoder_callback_2(int dir)
+{
+  encoder_count_2 += dir;
+}
+
+void init_encoders()
+{
+  // Encoder state and initalization
+  rot_encoder_1 = Pi_Renc(ENCODER_1_A, ENCODER_1_B, encoder_callback_1);
+  rot_encoder_2 = Pi_Renc(ENCODER_2_A, ENCODER_2_B, encoder_callback_2);
+}
+
+void cancel_encoders(void)
+{
+  Pi_Renc_cancel(rot_encoder_1);
+  Pi_Renc_cancel(rot_encoder_2);
+}
+
 void exit_handler(int s)
 {
   cout << "Exit given: " << s << endl;
@@ -69,7 +126,13 @@ void exit_handler(int s)
   gpioPWM(MOTOR_1_PWM, 0);
   gpioPWM(MOTOR_2_PWM, 0);
   gpioPWM(LIN_ACT_PWM, 0);
+
+  // Cancel Encoder ISRs 
+  cancel_encoders();
   gpioTerminate();
+
+
+  // Free adc reader
   exit(s);
 }
 
@@ -92,19 +155,24 @@ int main(int argc, char *argv[])
   }
   init_exit_handler();
 
-  int init_pwm_success = init_pwm();
-  cout << init_pwm_success << endl;
-//  // Encoder state and initalization
-//  Pi_Renc_t* rot_encoder_1;
-//  Pi_Renc_t* rot_encoder_2;
-//  rot_encoder_1 = 
-//    Pi_Renc(ENCODER_1_A_PIN, ENCODER_1_B_PIN, callback);
-//  rot_encoder_2 = 
-//    Pi_Renc(ENCODER_2_A_PIN, ENCODER_2_B_PIN, callback);
+  int init_pwm_success = !init_motors();
 
+  init_encoders();
 
-  // driver.set_duty_cycle(MOTOR_2_CHANNEL, 0.6);
-  // driver.set_duty_cycle(LIN_ACT_CHANNEL, 0.9);
+  int miso_pins[3] = {LIN_ACT_ADC_MISO, 1, 1};
+  int channel_0[3] = {-1, -1, -1};
+  int channel_1[3] = {-1, -1, -1};
+
+  adc_reader = init_adc_reader(
+    ADC_CS,
+    miso_pins,
+    1,
+    ADC_MOSI,
+    ADC_CLK,
+    1); // non reapeating adc reader
+
+  cout << "Init success?: Motors: " << init_pwm_success << 
+    ", and adc: " << (adc_reader != NULL) << endl;
 
   /** 
   * The asked for frequency isn't necessarily the set one
@@ -118,11 +186,16 @@ int main(int argc, char *argv[])
   long print_loop_freq_iters = static_cast<long>(
       round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec)));
 
+  long adc_loop_freq_iters = static_cast<long>(
+      round(1.0 / (ADC_FREQ_HZ * loop_wait_time_sec)));
+  
   cout << "Sampling freq HZ and period nsec: " <<
     SAMPLING_FREQ_HZ << "\t"  << loop_wait_time_nsec << endl;
   cout << "Print freq HZ and num iters: " << 
     PRINT_FREQ_HZ << "\t" << print_loop_freq_iters << endl;
-
+  cout << "ADC freq and num iters: " << 
+    (1.0 / (adc_loop_freq_iters * loop_wait_time_sec)) << ", " 
+    << adc_loop_freq_iters << endl;
 
   /**
   * Use timespec to wait for precise amounts of time
@@ -149,7 +222,7 @@ int main(int argc, char *argv[])
   int motor_1_dir = 0;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     num_iters++;
-    if (num_iters % 100 == 0) {
+    if (num_iters % 400 == 0) {
       gpioWrite(MOTOR_1_DIR, !motor_1_dir);
       gpioWrite(MOTOR_2_DIR, !motor_1_dir);
       gpioWrite(LIN_ACT_DIR, !motor_1_dir);
@@ -159,7 +232,13 @@ int main(int argc, char *argv[])
 
     // Print if its time to do so
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "Print here" << endl;
+      cout << "Count 1 and 2: "  << encoder_count_1 << "\t " << encoder_count_2 << endl;
+
+      cout << "ADC: " << channel_0[0] << ", " << channel_1[0] << endl;
+
+    }
+    if ((num_iters % adc_loop_freq_iters) == 0) {
+      last_readings(adc_reader, channel_0, channel_1);
     }
 
     // Loop timing code

@@ -12,10 +12,11 @@
 // source is in C
 extern "C"
 {
-#include "adc_reader.h"
 #include "rotary_encoder.h"
 #include "queue.h"
 }
+
+#include "adc_reader.hpp"
 #include "circular_buffer.hpp"
 #include "loop_state.hpp"
 #include "time_functions.hpp"
@@ -36,10 +37,14 @@ typedef pair<long, struct timespec> TimeStamp;
 
 // TODO fix pins
 #define SPI_PIN    19 // GPIO for slave select.
-#define MISO_PIN   6 // Input 
+#define MISO_PIN 11
+#define MISO_PIN_2 9
+//#define MISO_PIN   6 // Input 
 #define MOSI_PIN   26 // Output
-#define MISO_PIN_2 21 // 6
+//#define MISO_PIN_2 21 // 6
+//#define MISO_PIN_3 20
 #define CLK_PIN    5 // Clock
+
 
 // duty cycle range used by pwm
 #define PWM_RANGE 10000
@@ -48,7 +53,7 @@ typedef pair<long, struct timespec> TimeStamp;
 // frequency the count is quieried
 #define SAMPLING_FREQ_HZ 400
 #define PULSES_PER_REVOLUTION 2048
-#define RUN_FOR_TIME_SEC 15 
+#define RUN_FOR_TIME_SEC 60 
 
 #define EXPECTED_STAMPS 10E6
 
@@ -133,7 +138,7 @@ int main(int argc, char *argv[])
   // ADC state and initalization
   // janky until we actually do multiple inputs
   int only_miso_pin[] = {MISO_PIN, MISO_PIN_2};
-  ADC_Reader* reader = init_adc_reader(SPI_PIN, only_miso_pin, 2, MOSI_PIN, CLK_PIN);
+  ADC_Reader* reader = init_adc_reader(SPI_PIN, only_miso_pin, 2, MOSI_PIN, CLK_PIN, 1);
   // Configure motor pins to output  
   gpioSetMode(DIR_PIN,  PI_OUTPUT);
   gpioSetMode(PWM_PIN, PI_OUTPUT);

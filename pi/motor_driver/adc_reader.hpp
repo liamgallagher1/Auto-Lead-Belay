@@ -18,7 +18,7 @@ typedef struct ADC_Reader {
   int slave_select_pin;
   // input(s)
   int* miso_pins;
-  int num_inputs;
+  unsigned int num_inputs;
   // output
   int mosi_pin;
   // clock
@@ -27,7 +27,8 @@ typedef struct ADC_Reader {
   rawSPI_t rawSPI;
   // Wave Info
   rawWaveInfo_t rwi;
-
+  // Wave ID
+  int wid;
 
   // This state was copied from the old implementation.
   // I don't understand it or like their style.
@@ -39,11 +40,12 @@ typedef struct ADC_Reader {
 // Constructs an ADC reader
 // Returns null if theres an error
 struct ADC_Reader* init_adc_reader(
-  int slace_select_pin,
+  int slave_select_pin,
   int *miso_pins,
-  int num_inputs,
+  unsigned int num_inputs,
   int mosi_pin,
-  int clock_pin);
+  int clock_pin,
+  int repeat_wave);
 
 // Free's reader resources.
 // Don't not use reader after this
@@ -59,3 +61,10 @@ void last_readings(
   ADC_Reader* reader,
   int* channel_0,
   int* channel_1);
+
+// Runs two measurements and gets readings.
+// Might be kind of slow :(
+void get_readings(
+    ADC_Reader* reader,
+    int* channel_0,
+    int* channel_1);

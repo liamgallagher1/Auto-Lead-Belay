@@ -101,8 +101,8 @@ Pi_Renc_t * Pi_Renc(int gpioA, int gpioB, Pi_Renc_CB_t callback)
   /* monitor encoder level changes */
 
   // Try using ISR instead
-  printf("set a %d\n", gpioSetISRFuncEx(gpioA, EITHER_EDGE, -1, _cb, renc));
-  printf("set b %d\n", gpioSetISRFuncEx(gpioB, EITHER_EDGE, -1, _cb, renc));
+  gpioSetISRFuncEx(gpioA, EITHER_EDGE, -1, _cb, renc);
+  gpioSetISRFuncEx(gpioB, EITHER_EDGE, -1, _cb, renc);
 
   //gpioSetAlertFuncEx(gpioA, _cb, renc);
   //gpioSetAlertFuncEx(gpioB, _cb, renc);
@@ -112,11 +112,9 @@ Pi_Renc_t * Pi_Renc(int gpioA, int gpioB, Pi_Renc_CB_t callback)
 void Pi_Renc_cancel(Pi_Renc_t *renc)
 {
   if (renc) {
-    printf("clear a %d\n", gpioSetISRFuncEx(renc->gpioA, EITHER_EDGE, -1, 0, renc));
-    printf("clear b %d\n", gpioSetISRFuncEx(renc->gpioB, EITHER_EDGE, -1, 0, renc));
+    gpioSetISRFuncEx(renc->gpioA, EITHER_EDGE, -1, 0, renc);
+    gpioSetISRFuncEx(renc->gpioB, EITHER_EDGE, -1, 0, renc);
 
-    //gpioSetAlertFunc(renc->gpioA, 0);
-    //gpioSetAlertFunc(renc->gpioB, 0);
     free(renc);
   }
 }

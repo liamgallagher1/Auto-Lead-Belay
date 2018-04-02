@@ -23,7 +23,7 @@ PwmDriver::PwmDriver(
   i2cWriteByteData(_i2c_handle, _MODE2, _OCH | _OUTDRV);
 
 
-  std::chrono::nanoseconds timespan(5000);
+  std::chrono::microseconds timespan(500);
   std::this_thread::sleep_for(timespan);
 
   int mode = i2cReadByteData(_i2c_handle, _MODE1);
@@ -55,7 +55,7 @@ void PwmDriver::set_frequency_hz(double freq_hz)
   i2cWriteByteData(_i2c_handle, _PRESCALE, prescale);
   i2cWriteByteData(_i2c_handle, _MODE1, mode);
 
-  std::chrono::nanoseconds timespan(5000);
+  std::chrono::microseconds timespan(500);
   std::this_thread::sleep_for(timespan);
   
   i2cWriteByteData(_i2c_handle, _MODE1, mode | _RESTART);

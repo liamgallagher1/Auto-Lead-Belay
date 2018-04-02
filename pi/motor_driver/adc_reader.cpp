@@ -1,10 +1,13 @@
-#include <math.h>
+#include <chrono>
+#include <cmath>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <thread>
 
 #include <pigpio.h>
 
-#include "adc_reader.h"
+#include "adc_reader.hpp"
             
 static int BUFFER = 250;        // "Generally make as large as possible"?
 
@@ -13,22 +16,25 @@ static int BX = 6;              // Bit position of data bit B11
 static int B0 = 17;             // Bit position of data bit B0
 
 // Reading every number of microseconds
-// Leads to 1000 Hz sampling
-static int REPEAT_MICROS = 50; 
+// Leads to faster sampling
+static int REPEAT_MICROS = 100; 
+
+using namespace std;
 
 // Constructs an adc reader structure for all pins
 struct ADC_Reader* init_adc_reader(
     int slave_select_pin,
     int* miso_pins,
-    int num_inputs,
+    unsigned int num_inputs,
     int mosi_pin,
-    int clock_pin)
+    int clock_pin,
+    int repeat_wave)
 {
   ADC_Reader* reader = (struct ADC_Reader*)  calloc(sizeof(struct ADC_Reader), 1);
   reader->slave_select_pin = slave_select_pin;
   reader->miso_pins = miso_pins;
   reader->num_inputs = num_inputs;
-  reader->mosi_pin = clock_pin;
+  reader->mosi_pin = mosi_pin;
   reader->clock_pin = clock_pin;
 
   // Create raw spi type
@@ -69,7 +75,9 @@ struct ADC_Reader* init_adc_reader(
   buff[0] = 0xC0; // Single Ended, Channel 0
   buff[1] = 0xE0; // Single Ended, Channel 1
  
-  for (int i = 0; i < BUFFER; ++i) {
+  int wave_count = BUFFER; // (repeat_wave ? BUFFER: 2);
+
+  for (int i = 0; i < wave_count; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
       rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 4, BX, B0, B0);
@@ -80,15 +88,16 @@ struct ADC_Reader* init_adc_reader(
     offset += REPEAT_MICROS;
   }
   // Create gentle finish before it repeats
-  gpioPulse_t final[2];
-  final[0].gpioOn = 0;
-  final[0].gpioOff = 0;
-  final[0].usDelay = offset;
-  final[1].gpioOn = 0; // Need a dummy to force the final delay.
-  final[1].gpioOff = 0;
-  final[1].usDelay = 0;
-  gpioWaveAddGeneric(2, final);
+  gpioPulse_t finish[2];
+  finish[0].gpioOn = 0;
+  finish[0].gpioOff = 0;
+  finish[0].usDelay = offset;
+  finish[1].gpioOn = 0; // Need a dummy to force the finish delay.
+  finish[1].gpioOff = 0;
+  finish[1].usDelay = 0;
+  gpioWaveAddGeneric(2, finish);
   int wid = gpioWaveCreate(); // Create the wave from added data.
+  reader->wid = wid;
 
   if (wid < 0){
     printf("Can't create wave, %d too many?\n", BUFFER);
@@ -120,7 +129,7 @@ struct ADC_Reader* init_adc_reader(
    * true in this particular example).                        
    */
   // previos implementation used a float but it felt wrong. 
-  int cbs_per_reading = (int) floor((float)rwi.numCB / (float)BUFFER);
+  int cbs_per_reading = (int) floor((float)rwi.numCB / (float)wave_count);
   reader->cbs_per_reading = cbs_per_reading;
   printf("# cbs=%d per read=%d base=%d\n",
       rwi.numCB, cbs_per_reading, botCB);
@@ -132,8 +141,10 @@ struct ADC_Reader* init_adc_reader(
   */
   reader->topOOL = rwi.topOOL;
 
-  // Send wave to pigpio, set to repeat
-  gpioWaveTxSend(wid, PI_WAVE_MODE_REPEAT);
+  if (repeat_wave) {
+    // Send wave to pigpio, set to repeat
+    gpioWaveTxSend(wid, PI_WAVE_MODE_REPEAT);
+  }
 
   return reader;
 }
@@ -165,7 +176,7 @@ void get_reading(
 
   for (int i = 0; i < bits; i++) {
     level = rawWaveGetOut(p);
-    for (int input = 0; input < reader->num_inputs; ++input) {
+    for (unsigned int input = 0; input < reader->num_inputs; ++input) {
       // TODO understand this
       putBitInBytes(i, buf+(bytes*input), level & (1<<(reader->miso_pins[input])));
     }
@@ -221,5 +232,39 @@ void last_readings(
       channel_0[input] = val;
     }
   }
+}
+
+void get_readings(
+  ADC_Reader* reader,
+  int* channel_0,
+  int* channel_1)
+{
+ 
+  // Checks for sanity
+  // Control block for current reading
+  int cb = rawWaveCB() - reader->rwi.botCB;  
+  // Which "reading #" is this?
+  int now_reading_1 = cb / reader->cbs_per_reading;
+  // now_reading_1 = (now_reading_1 + BUFFER - 2) % BUFFER;
+
+  // If a wave is going, it waits for the end of it
+  int sending = gpioWaveTxSend(reader->wid, PI_WAVE_MODE_ONE_SHOT_SYNC);
+
+  // At 2.7 volts, the MCP can read 50k samples per second (100k at 5v)
+  // So the wave, 2 samples, should take 40 micr0seconds?
+  int wait_micros = gpioWaveGetMicros();
+
+  std::chrono::microseconds timespan(wait_micros);
+  std::this_thread::sleep_for(timespan);
+
+  cb = rawWaveCB() - reader->rwi.botCB;  
+  // Which "reading #" is this?
+  int now_reading_2 = cb / reader->cbs_per_reading;
+  // now_reading_2 = (now_reading_2 + BUFFER - 2) % BUFFER;
+
+  cout << "now readings: " << now_reading_1 << "\t" << now_reading_2 << endl;
+
+  // Now get the last readings
+  last_readings(reader, channel_0, channel_1);
 }
 

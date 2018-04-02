@@ -22,8 +22,8 @@ simple_reader: simple_reader.o adc_reader.o
 queue_estimator: queue_estimator.o rotary_encoder.o queue.o adc_reader.o loop_state.o 
 		$(CPPC)  $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o adc_reader.o loop_state.o $(LIBS)
 
-integrate: integrate.o rotary_encoder.o
-	$(CPPC) $(CFLAGS) -o integrate integrate.o rotary_encoder.o $(LIBS)
+integrate: integrate.o rotary_encoder.o adc_reader.o
+	$(CPPC) $(CFLAGS) -o integrate integrate.o rotary_encoder.o adc_reader.o $(LIBS)
 
 rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)
@@ -34,8 +34,8 @@ queue.o: queue.c queue.h
 driver.o: driver.c rotary_encoder.h 
 		gcc $(CFLAGS) -c driver.c $(LIBS)
 
-adc_reader.o: adc_reader.c adc_reader.h
-	gcc $(CFLAGS) -c adc_reader.c $(LIBS)
+adc_reader.o: adc_reader.cpp adc_reader.hpp
+	$(CPPC)  $(CFLAGS) -c adc_reader.cpp $(LIBS)
 
 circular_buffer.o: circular_buffer.cpp circular_buffer.hpp
 	$(CPPC) $(CFLAGS) -c circular_buffer.cpp $(LIBS)
@@ -49,7 +49,7 @@ simple_driver.o: simple_driver.c
 simple_reader.o: simple_reader.c
 	gcc $(CFLAGS) -c simple_reader.c $(LIBS)
 
-queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h time_functions.hpp loop_state.hpp circular_buffer.hpp
+queue_estimator.o: queue_estimator.cpp rotary_encoder.h queue.h time_functions.hpp loop_state.hpp circular_buffer.hpp adc_reader.hpp
 		$(CPPC)  $(CFLAGS) -c queue_estimator.cpp $(LIBS)
 
 pwm_driver.o: pwm_driver.cpp pwm_driver.hpp
