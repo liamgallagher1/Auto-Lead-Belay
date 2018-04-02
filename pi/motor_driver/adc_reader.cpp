@@ -17,7 +17,7 @@ static int B0 = 17;             // Bit position of data bit B0
 
 // Reading every number of microseconds
 // Leads to faster sampling
-static int REPEAT_MICROS = 100; 
+static int REPEAT_MICROS = 50; 
 
 using namespace std;
 
@@ -75,9 +75,7 @@ struct ADC_Reader* init_adc_reader(
   buff[0] = 0xC0; // Single Ended, Channel 0
   buff[1] = 0xE0; // Single Ended, Channel 1
  
-  int wave_count = BUFFER; // (repeat_wave ? BUFFER: 2);
-
-  for (int i = 0; i < wave_count; ++i) {
+  for (int i = 0; i < BUFFER; ++i) {
     // For odd i read from Channel 1, for even i read from channel 0
     if (i % 2) {
       rawWaveAddSPI(&reader->rawSPI, offset, slave_select_pin, &buff[0], 4, BX, B0, B0);
@@ -129,7 +127,7 @@ struct ADC_Reader* init_adc_reader(
    * true in this particular example).                        
    */
   // previos implementation used a float but it felt wrong. 
-  int cbs_per_reading = (int) floor((float)rwi.numCB / (float)wave_count);
+  int cbs_per_reading = (int) floor((float)rwi.numCB / (float) BUFFER);
   reader->cbs_per_reading = cbs_per_reading;
   printf("# cbs=%d per read=%d base=%d\n",
       rwi.numCB, cbs_per_reading, botCB);
@@ -210,6 +208,9 @@ void last_readings(
   // Pull the values from that
   for (unsigned int input = 0; input < reader->num_inputs; ++input) {
     int val = (rx[input*2]<<4) + (rx[(input*2)+1]>>4);
+    //if (input == 0 && val == 0) {
+    //  cout << "cb, nr, ool, is_cha_0: " << cb << "\t " << now_reading << "\t" << OOL << "\t" << is_cha_0 << endl;
+    //}
     if (is_cha_0) {
       channel_0[input] = val;
     } else {
@@ -234,37 +235,37 @@ void last_readings(
   }
 }
 
-void get_readings(
-  ADC_Reader* reader,
-  int* channel_0,
-  int* channel_1)
-{
- 
-  // Checks for sanity
-  // Control block for current reading
-  int cb = rawWaveCB() - reader->rwi.botCB;  
-  // Which "reading #" is this?
-  int now_reading_1 = cb / reader->cbs_per_reading;
-  // now_reading_1 = (now_reading_1 + BUFFER - 2) % BUFFER;
-
-  // If a wave is going, it waits for the end of it
-  int sending = gpioWaveTxSend(reader->wid, PI_WAVE_MODE_ONE_SHOT_SYNC);
-
-  // At 2.7 volts, the MCP can read 50k samples per second (100k at 5v)
-  // So the wave, 2 samples, should take 40 micr0seconds?
-  int wait_micros = gpioWaveGetMicros();
-
-  std::chrono::microseconds timespan(wait_micros);
-  std::this_thread::sleep_for(timespan);
-
-  cb = rawWaveCB() - reader->rwi.botCB;  
-  // Which "reading #" is this?
-  int now_reading_2 = cb / reader->cbs_per_reading;
-  // now_reading_2 = (now_reading_2 + BUFFER - 2) % BUFFER;
-
-  cout << "now readings: " << now_reading_1 << "\t" << now_reading_2 << endl;
-
-  // Now get the last readings
-  last_readings(reader, channel_0, channel_1);
-}
-
+//void get_readings(
+//  ADC_Reader* reader,
+//  int* channel_0,
+//  int* channel_1)
+//{
+// 
+//  // Checks for sanity
+//  // Control block for current reading
+//  int cb = rawWaveCB() - reader->rwi.botCB;  
+//  // Which "reading #" is this?
+//  int now_reading_1 = cb / reader->cbs_per_reading;
+//  // now_reading_1 = (now_reading_1 + BUFFER - 2) % BUFFER;
+//
+//  // If a wave is going, it waits for the end of it
+//  int sending = gpioWaveTxSend(reader->wid, PI_WAVE_MODE_ONE_SHOT_SYNC);
+//
+//  // At 2.7 volts, the MCP can read 50k samples per second (100k at 5v)
+//  // So the wave, 2 samples, should take 40 micr0seconds?
+//  int wait_micros = gpioWaveGetMicros();
+//
+//  std::chrono::microseconds timespan(wait_micros);
+//  std::this_thread::sleep_for(timespan);
+//
+//  cb = rawWaveCB() - reader->rwi.botCB;  
+//  // Which "reading #" is this?
+//  int now_reading_2 = cb / reader->cbs_per_reading;
+//  // now_reading_2 = (now_reading_2 + BUFFER - 2) % BUFFER;
+//
+//  cout << "now readings: " << now_reading_1 << "\t" << now_reading_2 << endl;
+//
+//  // Now get the last readings
+//  last_readings(reader, channel_0, channel_1);
+//}
+//

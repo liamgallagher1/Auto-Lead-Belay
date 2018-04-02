@@ -57,7 +57,14 @@ extern "C"
 
 // Resistors
 #define BOARD_2_R1 100000.0  // Nominal Resistor Values, worth identifing.
-#define BOARD_2_R2 470000.0
+#define BOARD_2_R2 220000.0
+
+#define BOARD_4_R5 470000.0
+#define BOARD_4_R4 620000.0
+#define BOARD_4_R1 100000.0
+#define BOARD_4_R3 330000.0
+#define BOARD_4_R6 100000.0
+#define BOARD_4_R7 330000.0
 
 
 volatile long encoder_count_1 = 0;
