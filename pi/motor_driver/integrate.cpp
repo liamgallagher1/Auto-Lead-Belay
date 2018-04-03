@@ -72,6 +72,11 @@ extern "C"
 #define BOARD_4_R6 100000.0
 #define BOARD_4_R7 330000.0
 
+// Learned amplification constants
+#define LIN_ACT_AMP 5.4047
+#define MOTOR_2_AMP 2.9431
+#define MOTOR_1_OFFSET_V -0.2053
+#define MOTOR_1_AMP     1.8068
 
 volatile long lm_encoder_count = 0;
 volatile long sm_encoder_count = 0;
@@ -97,7 +102,6 @@ int num_iters = 0;
 int init_motors(void)
 {
   //int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
-
   int motor_1_freq = gpioSetPWMfrequency(MOTOR_1_PWM, MOTOR_1_FREQ);
   int motor_1_range = gpioSetPWMrange(MOTOR_1_PWM, MOTOR_1_RANGE);
   int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
@@ -160,7 +164,8 @@ void current_calculations(
   // Voltage to current from specs
   double la_raw_a = la_raw_v * VNH5019_V_TO_A;  
   // Fix the amplified estimate to find v_in
-  double la_fixed_amped_v = la_amp_v / (1 + BOARD_4_R7 / BOARD_4_R6);
+  double la_fixed_amped_v = la_amp_v / LIN_ACT_AMP; 
+  // (1 + BOARD_4_R7 / BOARD_4_R6);
   double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[0] = la_raw_a;
   amplified_current_out[0] = la_amp_a;
@@ -176,7 +181,8 @@ void current_calculations(
   // Voltage to current from specs
   double sm_raw_a = sm_raw_v * VNH5019_V_TO_A;  
   // Fix the amplified estimate to find v_in
-  double sm_fixed_amped_v = sm_amp_v / (1 + BOARD_2_R2 / BOARD_2_R1);
+  double sm_fixed_amped_v = sm_amp_v / MOTOR_2_AMP; 
+  // (1 + BOARD_2_R2 / BOARD_2_R1);
   double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[1] = sm_raw_a;
   amplified_current_out[1] = sm_amp_a;
@@ -194,8 +200,10 @@ void current_calculations(
   // Voltage to current from specs
   double lm_raw_a = (lm_raw_v - 3.3/2) * ACS709_V_TO_A;  
   // Fix the amplified estimate to find v_in
-  const double a_vcc = 3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
-  double lm_fixed_amped_v = lm_amp_v * BOARD_4_R1 / BOARD_4_R3 + a_vcc;
+  const double a_vcc = MOTOR_1_OFFSET_V; 
+  //3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
+  double lm_fixed_amped_v = (lm_amp_v + a_vcc) * MOTOR_1_AMP; 
+  // * BOARD_4_R1 /BOARD_4_R3 + a_vcc;
   double lm_amp_a = (lm_fixed_amped_v - 3.3/2) * ACS709_V_TO_A;
   // cout << "raw v: " << lm_raw_v << "\tamped_v : " << lm_amp_v <<  "\ta_vcc: " << a_vcc << "\tfixed v" << lm_fixed_amped_v << endl; 
 
@@ -333,12 +341,21 @@ int main(int argc, char *argv[])
   int motor_1_dir = 0;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     num_iters++;
-    if (num_iters % 2000 == 0) {
+    // turn off
+    if (num_iters % 8000 == 0) {
       gpioWrite(MOTOR_1_DIR, !motor_1_dir);
       gpioWrite(MOTOR_2_DIR, !motor_1_dir);
       gpioWrite(LIN_ACT_DIR, !motor_1_dir);
-
       motor_1_dir = !motor_1_dir;
+
+      gpioPWM(MOTOR_1_PWM, 0);
+      gpioPWM(MOTOR_2_PWM, 0);
+      gpioPWM(LIN_ACT_PWM, 0);
+    // turn on
+    } else if (num_iters % 8000 == 500) {
+      gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
+      gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.6));
+      gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.8));
     }
 
     // Print if its time to do so
