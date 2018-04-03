@@ -18,8 +18,8 @@ extern "C"
 #include "loop_state.hpp"
 #include "time_functions.hpp"
 
-#define SAMPLING_FREQ_HZ 400 
-#define ADC_FREQ_HZ 400 // must be less than or equal
+#define SAMPLING_FREQ_HZ 1000 
+#define ADC_FREQ_HZ 1000 // must be less than or equal
 #define PRINT_FREQ_HZ 5
 #define RUN_FOR_TIME_SEC 60
 #define CLK_MICROS 1 // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
@@ -100,19 +100,19 @@ int init_motors(void)
 
   int motor_1_freq = gpioSetPWMfrequency(MOTOR_1_PWM, MOTOR_1_FREQ);
   int motor_1_range = gpioSetPWMrange(MOTOR_1_PWM, MOTOR_1_RANGE);
-  int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.25));
+  int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
   gpioSetMode(MOTOR_1_DIR, PI_OUTPUT);
   gpioWrite(MOTOR_1_DIR, 1); 
 
   int motor_2_freq = gpioSetPWMfrequency(MOTOR_2_PWM, MOTOR_2_FREQ);
   int motor_2_range = gpioSetPWMrange(MOTOR_2_PWM, MOTOR_2_RANGE);
-  int motor_2_pwm = gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.5));
+  int motor_2_pwm = gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.6));
   gpioSetMode(MOTOR_2_DIR, PI_OUTPUT);
   gpioWrite(MOTOR_2_DIR, 1);
 
   int lin_act_freq = gpioSetPWMfrequency(LIN_ACT_PWM, LIN_ACT_FREQ);
   int lin_act_range = gpioSetPWMrange(LIN_ACT_PWM, LIN_ACT_RANGE);
-  int lin_act_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.3));
+  int lin_act_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.8));
   gpioSetMode(LIN_ACT_DIR, PI_OUTPUT);
   gpioWrite(LIN_ACT_DIR, 1);
 
