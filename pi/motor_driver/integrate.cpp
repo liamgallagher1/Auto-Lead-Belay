@@ -19,26 +19,29 @@ extern "C"
 #define ADC_FREQ_HZ 400 // must be less than or equal
 #define PRINT_FREQ_HZ 5
 #define RUN_FOR_TIME_SEC 60
+#define CLK_MICROS 1 // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
 
 // The big motor
 #define MOTOR_1_PWM 18 // Only pin capable of hardware PWM on our model. 
 #define MOTOR_1_DIR 15
-#define MOTOR_1_FREQ 10000
-#define MOTOR_1_RANGE 1000000
-#define MOTOR_1_MISO 11
+//#define MOTOR_1_FREQ 10000
+//#define MOTOR_1_RANGE 1000000
+#define MOTOR_1_FREQ 4000
+#define MOTOR_1_RANGE 250
+#define MOTOR_1_MISO 9
 
 // The small motor
-#define MOTOR_2_PWM 22
-#define MOTOR_2_DIR 23
+#define MOTOR_2_PWM 6
+#define MOTOR_2_DIR 13
 #define MOTOR_2_FREQ  4000
-#define MOTOR_2_RANGE 50
-#define MOTOR_2_MISO 9
+#define MOTOR_2_RANGE 250
+#define MOTOR_2_MISO 11
 
 // The linear actuator
-#define LIN_ACT_PWM 13
-#define LIN_ACT_DIR 6
+#define LIN_ACT_PWM 22
+#define LIN_ACT_DIR 23
 #define LIN_ACT_FREQ 4000
-#define LIN_ACT_RANGE 50
+#define LIN_ACT_RANGE 250
 #define LIN_ACT_ADC_MISO 10
 
 // ADC
@@ -78,7 +81,11 @@ ADC_Reader* adc_reader;
 // Returns 0 if okay
 int init_motors(void)
 {
-  int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
+  //int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
+
+  int motor_1_freq = gpioSetPWMfrequency(MOTOR_1_PWM, MOTOR_1_FREQ);
+  int motor_1_range = gpioSetPWMrange(MOTOR_1_PWM, MOTOR_1_RANGE);
+  int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.25));
   gpioSetMode(MOTOR_1_DIR, PI_OUTPUT);
   gpioWrite(MOTOR_1_DIR, 1); 
 
@@ -95,7 +102,8 @@ int init_motors(void)
   gpioWrite(LIN_ACT_DIR, 1);
 
   cout << "ranges: " << motor_2_range << ", " << lin_act_pwm << endl;
-  return motor_1_pwm && motor_2_freq && motor_2_range && motor_2_pwm && 
+  return motor_1_freq && motor_1_range && motor_1_pwm &&
+        motor_2_freq && motor_2_range && motor_2_pwm && 
         lin_act_freq && lin_act_range && lin_act_pwm;
 }
 
@@ -117,6 +125,68 @@ void init_encoders()
   // Encoder state and initalization
   rot_encoder_1 = Pi_Renc(ENCODER_1_A, ENCODER_1_B, encoder_callback_1);
   rot_encoder_2 = Pi_Renc(ENCODER_2_A, ENCODER_2_B, encoder_callback_2);
+}
+
+// Calculates current readings for each actuator
+void current_calculations(
+    int* channel_0_in,
+    int* channel_1_in,
+    double* raw_current_out,
+    double* amplified_current_out,
+    bool*  use_amped_est)
+{
+  const double MPC_D_TO_V = 3.3 / 4095.0; // 12 BITS
+  const double VNH5019_V_TO_A = 1.0 / .140; // 140 mV/A when driving
+  // Linear Actuator Calculations
+  int la_raw_d = channel_1_in[0]; 
+  int la_amp_d = channel_0_in[0];
+  double la_raw_v = la_raw_d * MPC_D_TO_V;
+  double la_amp_v = la_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double la_raw_a = la_raw_v * VNH5019_V_TO_A;  
+  // Fix the amplified estimate to find v_in
+  double la_fixed_amped_v = la_amp_v / (1 + BOARD_4_R7 / BOARD_4_R6);
+  double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
+  raw_current_out[0] = la_raw_a;
+  amplified_current_out[0] = la_amp_a;
+  use_amped_est[0] = true;
+
+
+  // Small Motor Calculations
+  int sm_raw_d = channel_0_in[1];  
+  int sm_amp_d = channel_1_in[1]; 
+   // Read Voltages
+  double sm_raw_v = sm_raw_d * MPC_D_TO_V;
+  double sm_amp_v = sm_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double sm_raw_a = sm_raw_v * VNH5019_V_TO_A;  
+  // Fix the amplified estimate to find v_in
+  double sm_fixed_amped_v = sm_amp_v / (1 + BOARD_2_R2 / BOARD_2_R1);
+  double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
+  raw_current_out[1] = sm_raw_a;
+  amplified_current_out[1] = sm_amp_a;
+  use_amped_est[1] = true;
+
+
+  // Large Motor Calculations
+  const double ACS709_V_TO_A = 1.0 / 0.0185; // 18.5mV/A at 3.3V
+  // Digital estimates
+  int lm_raw_d = channel_1_in[2]; 
+  int lm_amp_d = channel_0_in[2];
+  // Read Voltages
+  double lm_raw_v = lm_raw_d * MPC_D_TO_V;
+  double lm_amp_v = lm_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double lm_raw_a = (lm_raw_v - 3.3/2) * ACS709_V_TO_A;  
+  // Fix the amplified estimate to find v_in
+  const double a_vcc = 3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
+  double lm_fixed_amped_v = lm_amp_v * BOARD_4_R1 / BOARD_4_R3 + a_vcc;
+  double lm_amp_a = (lm_fixed_amped_v - 3.3/2) * ACS709_V_TO_A;
+  // cout << "raw v: " << lm_raw_v << "\tamped_v : " << lm_amp_v <<  "\ta_vcc: " << a_vcc << "\tfixed v" << lm_fixed_amped_v << endl; 
+
+  raw_current_out[2] = lm_raw_a;
+  amplified_current_out[2] = lm_amp_a;
+  use_amped_est[2] = true; // TODO, consider saturation limits
 }
 
 void cancel_encoders(void)
@@ -156,6 +226,7 @@ int main(int argc, char *argv[])
 {
   int num_iters = 0;
 
+  gpioCfgClock(CLK_MICROS, 1, 0);
   if (gpioInitialise() < 0) {
     cout << "Failed GPIO Init" << endl;
     return 1;
@@ -166,9 +237,12 @@ int main(int argc, char *argv[])
 
   init_encoders();
 
-  int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_1_MISO, MOTOR_2_MISO};
+  int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_2_MISO, MOTOR_1_MISO};
   int channel_0[3] = {-1, -1, -1};
   int channel_1[3] = {-1, -1, -1};
+  double raw_current_readings[3] = {-1.0, -1.0, -1.0};
+  double amp_current_readings[3] = {-1.0, -1.0, -1.0};
+  bool use_amp_readings[3] = {false, false, false};
 
   adc_reader = init_adc_reader(
     ADC_CS,
@@ -229,7 +303,7 @@ int main(int argc, char *argv[])
   int motor_1_dir = 0;
   while(!past_time(&curr_loop_time, &finish_time) ) {
     num_iters++;
-    if (num_iters % 4000 == 0) {
+    if (num_iters % 2000 == 0) {
       gpioWrite(MOTOR_1_DIR, !motor_1_dir);
       gpioWrite(MOTOR_2_DIR, !motor_1_dir);
       gpioWrite(LIN_ACT_DIR, !motor_1_dir);
@@ -242,11 +316,16 @@ int main(int argc, char *argv[])
       cout << "\nCounts:"  << encoder_count_1 << "\t " << encoder_count_2 << "\nADC1:\t" <<
             channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
             channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
-            channel_0[2] << "\t" << channel_1[2] << endl;
+            channel_0[2] << "\t" << channel_1[2] << 
+            "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
+            "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
+            "\nLarge Motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
 
     }
     if ((num_iters % adc_loop_freq_iters) == 0) {
       last_readings(adc_reader, channel_0, channel_1);
+      current_calculations(channel_0, channel_1, 
+          raw_current_readings, amp_current_readings, use_amp_readings);
     }
 
     // Loop timing code

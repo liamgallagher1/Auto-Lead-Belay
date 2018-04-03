@@ -18,15 +18,37 @@ typedef std::pair<long, struct timespec> TimeStamp;
 //}
 
 typedef struct LoopState {
+  // Loop info
   struct timespec loop_time;
-  long motor_count;
-  double motor_pos_r;
-  double vel_est_rs;
-  double accel_est_rss;
+  long loop_count;
 
-  unsigned int u_of_t;
-  unsigned int raw_adc;
-  unsigned int amplified_adc;
+  // ADC info
+  int la_raw_adc;
+  int la_amp_adc;
+  int sm_raw_adc;
+  int sm_amp_adc;
+  int lm_raw_adc;
+  int lm_amp_adc;
+
+  double la_current;
+  double sm_current;
+  double lm_current;
+  
+  long lm_count;
+  long sm_count;
+ 
+  double sm_pos_r;
+  double sm_vel_est_rs;
+
+
+  double lm_pos_r;
+  double sm_vel_est_rs;
+
+  // Duty cycles in percents
+  float la_duty_cycle;
+  float sm_duty_cycle;
+  float lm_duty_cycle;
+
 } LoopState;
 
 
