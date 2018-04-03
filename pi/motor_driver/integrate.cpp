@@ -73,10 +73,10 @@ extern "C"
 #define BOARD_4_R7 330000.0
 
 // Learned amplification constants
-#define LIN_ACT_AMP 5.4047
-#define MOTOR_2_AMP 2.9431
-#define MOTOR_1_OFFSET_V -0.2053
-#define MOTOR_1_AMP     1.8068
+#define LIN_ACT_AMP 4.5458 
+#define MOTOR_2_AMP 3.2912
+#define MOTOR_1_OFFSET_V (-1.4119)
+#define MOTOR_1_AMP  3.3686
 
 volatile long lm_encoder_count = 0;
 volatile long sm_encoder_count = 0;
@@ -199,10 +199,11 @@ void current_calculations(
   double lm_amp_v = lm_amp_d * MPC_D_TO_V;
   // Voltage to current from specs
   double lm_raw_a = (lm_raw_v - 3.3/2) * ACS709_V_TO_A;  
+  
   // Fix the amplified estimate to find v_in
   const double a_vcc = MOTOR_1_OFFSET_V; 
   //3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
-  double lm_fixed_amped_v = (lm_amp_v + a_vcc) * MOTOR_1_AMP; 
+  double lm_fixed_amped_v = (lm_amp_v / MOTOR_1_AMP) - a_vcc; 
   // * BOARD_4_R1 /BOARD_4_R3 + a_vcc;
   double lm_amp_a = (lm_fixed_amped_v - 3.3/2) * ACS709_V_TO_A;
   // cout << "raw v: " << lm_raw_v << "\tamped_v : " << lm_amp_v <<  "\ta_vcc: " << a_vcc << "\tfixed v" << lm_fixed_amped_v << endl; 
