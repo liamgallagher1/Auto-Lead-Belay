@@ -212,7 +212,7 @@ void add_loop_state(vector<LoopState>& history)
   ls.sm_raw_adc = channel_0[1];
   ls.sm_amp_adc = channel_1[1];
   ls.lm_raw_adc = channel_1[2];
-  ls.lm_raw_adc = channel_0[2];
+  ls.lm_amp_adc = channel_0[2];
   history.push_back(ls);
 }
 
