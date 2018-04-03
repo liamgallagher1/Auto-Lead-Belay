@@ -26,7 +26,7 @@ void write_loops_to_file(
     to_string(hour) + string("_") + to_string(min) + string(".csv");
 
   ofstream output_file(full_file_name); //, std::ofstream::out);
-  output_file << "Time s, time ns, loop count, la_raw_adc, la_raw_adc, la_amp_adc, sm_raw_adc, sm_amp_adc, lm_raw_adc, lm_amp_adc, la_current, sm_current, lm_current, lm_count, sm_count, sm_pos_r, sm_vel_est_rs, lm_pos_r, sm_vel_est_rs, la_duty_cycle, sm_duty_cycle, lm_duty_cycle\n";
+  output_file << "Time s, time ns, loop count, la_raw_adc, la_amp_adc, sm_raw_adc, sm_amp_adc, lm_raw_adc, lm_amp_adc, la_current, sm_current, lm_current, lm_count, sm_count, sm_pos_r, sm_vel_est_rs, lm_pos_r, sm_vel_est_rs, la_duty_cycle, sm_duty_cycle, lm_duty_cycle\n";
 
   for (unsigned int i = 0; i < history.size(); ++i) {
     LoopState now = history[i];
