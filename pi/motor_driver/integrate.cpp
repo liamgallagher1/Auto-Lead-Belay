@@ -77,6 +77,8 @@ extern "C"
 #define MOTOR_2_AMP 3.2912
 #define MOTOR_1_OFFSET_V (-1.4119)
 #define MOTOR_1_AMP  3.3686
+#define MOTOR_1_NO_CURRENT_V 1.7225 
+
 
 volatile long lm_encoder_count = 0;
 volatile long sm_encoder_count = 0;
@@ -96,170 +98,26 @@ bool use_amp_readings[3] = {false, false, false};
 // Time that we started the current loop,
 struct timespec curr_loop_time;
 // Number of this iteration
-int num_iters = 0;
+long num_iters = 0;
 
-// Returns 0 if okay
-int init_motors(void)
-{
-  //int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
-  int motor_1_freq = gpioSetPWMfrequency(MOTOR_1_PWM, MOTOR_1_FREQ);
-  int motor_1_range = gpioSetPWMrange(MOTOR_1_PWM, MOTOR_1_RANGE);
-  int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
-  gpioSetMode(MOTOR_1_DIR, PI_OUTPUT);
-  gpioWrite(MOTOR_1_DIR, 1); 
+// Forward function decarations
 
-  int motor_2_freq = gpioSetPWMfrequency(MOTOR_2_PWM, MOTOR_2_FREQ);
-  int motor_2_range = gpioSetPWMrange(MOTOR_2_PWM, MOTOR_2_RANGE);
-  int motor_2_pwm = gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.6));
-  gpioSetMode(MOTOR_2_DIR, PI_OUTPUT);
-  gpioWrite(MOTOR_2_DIR, 1);
-
-  int lin_act_freq = gpioSetPWMfrequency(LIN_ACT_PWM, LIN_ACT_FREQ);
-  int lin_act_range = gpioSetPWMrange(LIN_ACT_PWM, LIN_ACT_RANGE);
-  int lin_act_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.8));
-  gpioSetMode(LIN_ACT_DIR, PI_OUTPUT);
-  gpioWrite(LIN_ACT_DIR, 1);
-
-  cout << "ranges: " << motor_2_range << ", " << lin_act_pwm << endl;
-  return motor_1_freq && motor_1_range && motor_1_pwm &&
-        motor_2_freq && motor_2_range && motor_2_pwm && 
-        lin_act_freq && lin_act_range && lin_act_pwm;
-}
-
-// Simple Encoder Callback
-// Timestamping also an option
-// This should all be C++
-void encoder_callback_1(int dir)
-{
-  lm_encoder_count += dir;
-}
-
-void encoder_callback_2(int dir)
-{
-  sm_encoder_count += dir;
-}
-
-void init_encoders()
-{
-  // Encoder state and initalization
-  rot_encoder_1 = Pi_Renc(ENCODER_1_A, ENCODER_1_B, encoder_callback_1);
-  rot_encoder_2 = Pi_Renc(ENCODER_2_A, ENCODER_2_B, encoder_callback_2);
-}
-
+int init_motors(void);
+void encoder_callback_1(int dir);
+void encoder_callback_2(int dir);
+void init_encoders(void);
 // Calculates current readings for each actuator
 void current_calculations(
     int* channel_0_in,
     int* channel_1_in,
     double* raw_current_out,
     double* amplified_current_out,
-    bool*  use_amped_est)
-{
-  const double MPC_D_TO_V = 3.3 / 4095.0; // 12 BITS
-  const double VNH5019_V_TO_A = 1.0 / .140; // 140 mV/A when driving
-  // Linear Actuator Calculations
-  int la_raw_d = channel_1_in[0]; 
-  int la_amp_d = channel_0_in[0];
-  double la_raw_v = la_raw_d * MPC_D_TO_V;
-  double la_amp_v = la_amp_d * MPC_D_TO_V;
-  // Voltage to current from specs
-  double la_raw_a = la_raw_v * VNH5019_V_TO_A;  
-  // Fix the amplified estimate to find v_in
-  double la_fixed_amped_v = la_amp_v / LIN_ACT_AMP; 
-  // (1 + BOARD_4_R7 / BOARD_4_R6);
-  double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
-  raw_current_out[0] = la_raw_a;
-  amplified_current_out[0] = la_amp_a;
-  use_amped_est[0] = true;
+    bool*  use_amped_est);
 
-
-  // Small Motor Calculations
-  int sm_raw_d = channel_0_in[1];  
-  int sm_amp_d = channel_1_in[1]; 
-   // Read Voltages
-  double sm_raw_v = sm_raw_d * MPC_D_TO_V;
-  double sm_amp_v = sm_amp_d * MPC_D_TO_V;
-  // Voltage to current from specs
-  double sm_raw_a = sm_raw_v * VNH5019_V_TO_A;  
-  // Fix the amplified estimate to find v_in
-  double sm_fixed_amped_v = sm_amp_v / MOTOR_2_AMP; 
-  // (1 + BOARD_2_R2 / BOARD_2_R1);
-  double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
-  raw_current_out[1] = sm_raw_a;
-  amplified_current_out[1] = sm_amp_a;
-  use_amped_est[1] = true;
-
-
-  // Large Motor Calculations
-  const double ACS709_V_TO_A = 1.0 / 0.0185; // 18.5mV/A at 3.3V
-  // Digital estimates
-  int lm_raw_d = channel_1_in[2]; 
-  int lm_amp_d = channel_0_in[2];
-  // Read Voltages
-  double lm_raw_v = lm_raw_d * MPC_D_TO_V;
-  double lm_amp_v = lm_amp_d * MPC_D_TO_V;
-  // Voltage to current from specs
-  double lm_raw_a = (lm_raw_v - 3.3/2) * ACS709_V_TO_A;  
-  
-  // Fix the amplified estimate to find v_in
-  const double a_vcc = MOTOR_1_OFFSET_V; 
-  //3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
-  double lm_fixed_amped_v = (lm_amp_v / MOTOR_1_AMP) - a_vcc; 
-  // * BOARD_4_R1 /BOARD_4_R3 + a_vcc;
-  double lm_amp_a = (lm_fixed_amped_v - 3.3/2) * ACS709_V_TO_A;
-  // cout << "raw v: " << lm_raw_v << "\tamped_v : " << lm_amp_v <<  "\ta_vcc: " << a_vcc << "\tfixed v" << lm_fixed_amped_v << endl; 
-
-  raw_current_out[2] = lm_raw_a;
-  amplified_current_out[2] = lm_amp_a;
-  use_amped_est[2] = true; // TODO, consider saturation limits
-}
-
-void add_loop_state(vector<LoopState>& history) 
-{
-  LoopState ls;
-  ls.la_raw_adc = channel_1[0];
-  ls.la_amp_adc = channel_0[0];
-  ls.sm_raw_adc = channel_0[1];
-  ls.sm_amp_adc = channel_1[1];
-  ls.lm_raw_adc = channel_1[2];
-  ls.lm_amp_adc = channel_0[2];
-  history.push_back(ls);
-}
-
-void cancel_encoders(void)
-{
-  Pi_Renc_cancel(rot_encoder_1);
-  Pi_Renc_cancel(rot_encoder_2);
-}
-
-void exit_handler(int s)
-{
-  cout << "Exit given: " << s << endl;
-  // TODO turn off all pwm and be safe
-  // TODO consider safer ramp down
-  gpioPWM(MOTOR_1_PWM, 0);
-  gpioPWM(MOTOR_2_PWM, 0);
-  gpioPWM(LIN_ACT_PWM, 0);
-
-  // Cancel Encoder ISRs 
-  cancel_encoders();
-  gpioTerminate();
-
-  // Free adc reader
-  free_adc_reader(adc_reader);
-  if (s == 0) {
-    return;
-  }
-  exit(s);
-}
-
-void init_exit_handler(void)
-{
-  struct sigaction sigIntHandler;
-  sigIntHandler.sa_handler = exit_handler;
-  sigemptyset(&sigIntHandler.sa_mask);
-  sigIntHandler.sa_flags = 0;
-  sigaction(SIGINT, &sigIntHandler, NULL);
-}
+void add_loop_state(vector<LoopState>& history);
+void cancel_encoders(void);
+void exit_handler(int s);
+void init_exit_handler(void);
 
 int main(int argc, char *argv[])
 {
@@ -408,5 +266,186 @@ int main(int argc, char *argv[])
   return 0;
 }
 
+// Returns 0 if okay
+int init_motors(void)
+{
+  //int motor_1_pwm = 0; //gpioHardwarePWM(MOTOR_1_PWM, MOTOR_1_FREQ, round(MOTOR_1_RANGE * 0.5));
+  int motor_1_freq = gpioSetPWMfrequency(MOTOR_1_PWM, MOTOR_1_FREQ);
+  int motor_1_range = gpioSetPWMrange(MOTOR_1_PWM, MOTOR_1_RANGE);
+  int motor_1_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
+  gpioSetMode(MOTOR_1_DIR, PI_OUTPUT);
+  gpioWrite(MOTOR_1_DIR, 1); 
+
+  int motor_2_freq = gpioSetPWMfrequency(MOTOR_2_PWM, MOTOR_2_FREQ);
+  int motor_2_range = gpioSetPWMrange(MOTOR_2_PWM, MOTOR_2_RANGE);
+  int motor_2_pwm = gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.6));
+  gpioSetMode(MOTOR_2_DIR, PI_OUTPUT);
+  gpioWrite(MOTOR_2_DIR, 1);
+
+  int lin_act_freq = gpioSetPWMfrequency(LIN_ACT_PWM, LIN_ACT_FREQ);
+  int lin_act_range = gpioSetPWMrange(LIN_ACT_PWM, LIN_ACT_RANGE);
+  int lin_act_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.8));
+  gpioSetMode(LIN_ACT_DIR, PI_OUTPUT);
+  gpioWrite(LIN_ACT_DIR, 1);
+
+  cout << "ranges: " << motor_2_range << ", " << lin_act_pwm << endl;
+  return motor_1_freq && motor_1_range && motor_1_pwm &&
+        motor_2_freq && motor_2_range && motor_2_pwm && 
+        lin_act_freq && lin_act_range && lin_act_pwm;
+}
+
+// Simple Encoder Callback
+// Timestamping also an option
+// This should all be C++
+void encoder_callback_1(int dir)
+{
+  lm_encoder_count += dir;
+}
+
+void encoder_callback_2(int dir)
+{
+  sm_encoder_count += dir;
+}
+
+void init_encoders()
+{
+  // Encoder state and initalization
+  rot_encoder_1 = Pi_Renc(ENCODER_1_A, ENCODER_1_B, encoder_callback_1);
+  rot_encoder_2 = Pi_Renc(ENCODER_2_A, ENCODER_2_B, encoder_callback_2);
+}
+
+// Calculates current readings for each actuator
+void current_calculations(
+    int* channel_0_in,
+    int* channel_1_in,
+    double* raw_current_out,
+    double* amplified_current_out,
+    bool*  use_amped_est)
+{
+  const double MPC_D_TO_V = 3.3 / 4095.0; // 12 BITS
+  const double VNH5019_V_TO_A = 1.0 / .140; // 140 mV/A when driving
+  // Linear Actuator Calculations
+  int la_raw_d = channel_1_in[0]; 
+  int la_amp_d = channel_0_in[0];
+  double la_raw_v = la_raw_d * MPC_D_TO_V;
+  double la_amp_v = la_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double la_raw_a = la_raw_v * VNH5019_V_TO_A;  
+  // Fix the amplified estimate to find v_in
+  double la_fixed_amped_v = la_amp_v / LIN_ACT_AMP; 
+  // (1 + BOARD_4_R7 / BOARD_4_R6);
+  double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
+  raw_current_out[0] = la_raw_a;
+  amplified_current_out[0] = la_amp_a;
+  use_amped_est[0] = la_amp_v < 3.0 && la_raw_v < 0.5;
+
+
+  // Small Motor Calculations
+  int sm_raw_d = channel_0_in[1];  
+  int sm_amp_d = channel_1_in[1]; 
+   // Read Voltages
+  double sm_raw_v = sm_raw_d * MPC_D_TO_V;
+  double sm_amp_v = sm_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double sm_raw_a = sm_raw_v * VNH5019_V_TO_A;  
+  // Fix the amplified estimate to find v_in
+  double sm_fixed_amped_v = sm_amp_v / MOTOR_2_AMP; 
+  // (1 + BOARD_2_R2 / BOARD_2_R1);
+  double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
+  raw_current_out[1] = sm_raw_a;
+  amplified_current_out[1] = sm_amp_a;
+  use_amped_est[1] = sm_amp_v < 3.0 && sm_raw_v < 0.5;
+
+
+  // Large Motor Calculations
+  const double ACS709_V_TO_A = 1.0 / 0.0185; // 18.5mV/A at 3.3V
+  // Digital estimates
+  int lm_raw_d = channel_1_in[2]; 
+  int lm_amp_d = channel_0_in[2];
+  // Read Voltages
+  double lm_raw_v = lm_raw_d * MPC_D_TO_V;
+  double lm_amp_v = lm_amp_d * MPC_D_TO_V;
+  // Voltage to current from specs
+  double lm_raw_a = (lm_raw_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;  
+  
+  // Fix the amplified estimate to find v_in
+  const double a_vcc = MOTOR_1_OFFSET_V; 
+  //3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
+  double lm_fixed_amped_v = (lm_amp_v / MOTOR_1_AMP) - a_vcc; 
+  // BOARD_4_R1 /BOARD_4_R3 + a_vcc;
+  double lm_amp_a = (lm_fixed_amped_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;
+
+  raw_current_out[2] = lm_raw_a;
+  amplified_current_out[2] = lm_amp_a;
+  use_amped_est[2] = lm_amp_v > 0.3 && lm_amp_v < 3.0; 
+}
+void add_loop_state(vector<LoopState>& history) 
+{
+  LoopState ls;
+  ls.loop_time = curr_loop_time;
+  ls.loop_count = num_iters;
+
+  ls.la_raw_adc = channel_1[0];
+  ls.la_amp_adc = channel_0[0];
+  ls.sm_raw_adc = channel_0[1];
+  ls.sm_amp_adc = channel_1[1];
+  ls.lm_raw_adc = channel_1[2];
+  ls.lm_amp_adc = channel_0[2];
+
+  ls.la_current = use_amp_readings[0] ? amp_current_readings[0] : raw_current_readings[0];
+  ls.sm_current = use_amp_readings[1] ? amp_current_readings[1] : raw_current_readings[1];
+  ls.lm_current = use_amp_readings[2] ? amp_current_readings[2] : raw_current_readings[2];
+  
+  ls.lm_count = lm_encoder_count;
+  ls.sm_count = sm_encoder_count;
+ 
+  ls.sm_pos_r = -1;
+  ls.sm_vel_est_rs = -1;
+
+  ls.lm_pos_r = -1;
+  ls.lm_vel_est_rs = -1;
+
+  // Duty cycles in percents
+  ls.la_duty_cycle = -1;
+  ls.sm_duty_cycle = -1;
+  ls.lm_duty_cycle = -1;
+  history.push_back(ls);
+}
+
+void cancel_encoders(void)
+{
+  Pi_Renc_cancel(rot_encoder_1);
+  Pi_Renc_cancel(rot_encoder_2);
+}
+
+void exit_handler(int s)
+{
+  cout << "Exit given: " << s << endl;
+  // TODO turn off all pwm and be safe
+  // TODO consider safer ramp down
+  gpioPWM(MOTOR_1_PWM, 0);
+  gpioPWM(MOTOR_2_PWM, 0);
+  gpioPWM(LIN_ACT_PWM, 0);
+
+  // Cancel Encoder ISRs 
+  cancel_encoders();
+  gpioTerminate();
+
+  // Free adc reader
+  free_adc_reader(adc_reader);
+  if (s == 0) {
+    return;
+  }
+  exit(s);
+}
+
+void init_exit_handler(void)
+{
+  struct sigaction sigIntHandler;
+  sigIntHandler.sa_handler = exit_handler;
+  sigemptyset(&sigIntHandler.sa_mask);
+  sigIntHandler.sa_flags = 0;
+  sigaction(SIGINT, &sigIntHandler, NULL);
+}
 
 
