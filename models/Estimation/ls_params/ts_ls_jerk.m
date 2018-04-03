@@ -11,18 +11,25 @@ alpha_weight = 0; % 0.1;
 jerk_weight = 0; % 5*10^-2; %5 * 10^-6; % 5 * 10^-15; %5 * 10^-35;
 
 % Load 'time', 'theta_t', 'omega_t', 'alpha_t'
-load('x_v_a_48_17_48.mat');
+%load('x_v_a_48_17_48.mat');
 %load('x_v_a_guess.mat');
 % Load time_stamps, counts
 %load('time_stamps_avery.mat');
-load('48_17_stamping.mat');
+%load('48_17_stamping.mat');
 
+filename = '../../../pi/motor_driver/logs/timestamp_test53_5_46.csv';
+A = csvread(filename, 4, 0);
+time_stamps_us = A(1:length(A) / 2);
+time_stamps = time_stamps_us / 10^6;
+counts = A(length(A)/2 + 1:end);
 
 % Make the time start from zero seconds
-time_stamps = time_stamps - time(1);
+time_stamps = time_stamps - time_stamps(1);
+% time = time_stamps - time_stamps(1);
+% Ts   = time_stamps(2) - time_stamps(1);
+Ts = 0.001;
+time = 0:Ts:time_stamps(end);
 
-time = time - time(1);
-Ts = time(2) - time(1);
 
 % Filtered estimates
 theta_fil = zeros(length(time), 1);
@@ -34,9 +41,6 @@ ses_omega = zeros(length(time), 1);
 ses_alpha = zeros(length(time), 1);
 ses_jerk  = zeros(length(time), 1); 
 
-
-
-
 % Do a simple test. 
 start_indx = num_counts * sigma + 1;
 
@@ -44,7 +48,7 @@ start_indx = num_counts * sigma + 1;
 prev_indx = 1;
 
 for i = start_indx:1:length(time)
-    curr_time = time(i);
+    curr_time = ceil(time_stamps(i) / Ts) * Ts;
     % Find the last time stamp less than the curent time
     stamp_indx = find(time_stamps(prev_indx:end) > curr_time, 1) - 1  + prev_indx - 1;
     stamp_buffer = time_stamps(stamp_indx - start_indx : stamp_indx);

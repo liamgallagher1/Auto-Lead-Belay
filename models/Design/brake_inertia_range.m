@@ -63,6 +63,10 @@ xlabel('Rope Velocity [m/s]');
 ylabel('Blade Thickness [in]');
 title('Brake system inertia [kg m^2], spool diam = 6in, spring saturation at 4 m/s');
 
+figure;
+
+
+
 
 
 

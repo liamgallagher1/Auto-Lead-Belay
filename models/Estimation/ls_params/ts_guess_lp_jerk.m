@@ -37,8 +37,8 @@ since_last = curr_time - sub_t(1);
 theta_prior = sub_c(1) + omega_prior * since_last; % + 0.5 * alpha_prior * since_last^2;
 if (abs(theta_prior - sub_c(1)) > 1)
     phantom_c = sub_c(1) + sign(theta_prior - sub_c(1));
-    sub_c = [phantom_c, sub_c(1:end - 1)];
-    sub_t = [curr_time, sub_t(1:end - 1)];
+    sub_c = [phantom_c, sub_c(1:end - 1)'];
+    sub_t = [curr_time, sub_t(1:end - 1)'];
 end
 
 % Normalize time
@@ -52,7 +52,12 @@ curr_time_n = (curr_time - sub_t(end)) / delta_t;
 % Second to last two columns reserved for the prior
 % Last columns for the snap cost
 A = zeros(num_counts + 2 + order - 2, order + 1);
-B = [norm_c'; zeros(2 + order - 2, 1)];
+disp(size(norm_c));
+[i, j] = size(norm_c);
+if (i == 1)
+    norm_c = norm_c';
+end
+B = [norm_c; zeros(2 + order - 2, 1)];
 
 % jerk squared cost
 % Don't normalize times? actual integral
@@ -148,45 +153,45 @@ se_jerk = P' * M_real * P;
 
 % %% plotting code to debug
 % 
-% num_plot_points = 100;
-% % Times in seconds
-% time_plot_s = sub_t(end): (curr_time - sub_t(end)) / num_plot_points : curr_time;
-% % Normalized times
-% time_plot_n = (time_plot_s - sub_t(end)) / delta_t;
-% % Normalized times raised to powers
-% time_plot_p = zeros(length(time_plot_s), order + 1);
-% 
-% for pow = 0:order
-%     time_plot_p(:, order + 1 - pow) = time_plot_n.^pow';
-% end
-% 
-% 
-% theta_hat_t = time_plot_p * P + sub_c(end); 
-% vel_hat_t = time_plot_p(:, 2:end) * P_v;
-% vel_hat_t = vel_hat_t / delta_t;
-% alpha_hat_t = time_plot_p(:, 3:end) * P_a;
-% alpha_hat_t = alpha_hat_t / delta_t^2;
-% 
-% % counts to radians
-% c_t_r = 2 * pi / (4 * 2048);
-% clf;
-% subplot(3, 1, 1);
-% plot(time_plot_s, theta_hat_t * c_t_r);
-% hold on; 
-% plot(sub_t, sub_c * c_t_r, 'x');
-% xlabel('Time [s]');
-% ylabel('Radial position [rad]');
-% 
-% subplot(3, 1, 2);
-% plot(time_plot_s, vel_hat_t * c_t_r);
-% xlabel('Time [s]');
-% ylabel('Radial velocity [rad/s]');
-% 
-% 
-% subplot(3, 1, 3); 
-% plot(time_plot_s, alpha_hat_t * c_t_r);
-% xlabel('Time [s]');
-% ylabel('Radial acceleration [rad/s^2]');
+num_plot_points = 100;
+% Times in seconds
+time_plot_s = sub_t(end): (curr_time - sub_t(end)) / num_plot_points : curr_time;
+% Normalized times
+time_plot_n = (time_plot_s - sub_t(end)) / delta_t;
+% Normalized times raised to powers
+time_plot_p = zeros(length(time_plot_s), order + 1);
+
+for pow = 0:order
+    time_plot_p(:, order + 1 - pow) = time_plot_n.^pow';
+end
+
+
+theta_hat_t = time_plot_p * P + sub_c(end); 
+vel_hat_t = time_plot_p(:, 2:end) * P_v;
+vel_hat_t = vel_hat_t / delta_t;
+alpha_hat_t = time_plot_p(:, 3:end) * P_a;
+alpha_hat_t = alpha_hat_t / delta_t^2;
+
+% counts to radians
+c_t_r = 2 * pi / (4 * 2048);
+clf;
+subplot(3, 1, 1);
+plot(time_plot_s, theta_hat_t * c_t_r);
+hold on; 
+plot(sub_t, sub_c * c_t_r, 'x');
+xlabel('Time [s]');
+ylabel('Radial position [rad]');
+
+subplot(3, 1, 2);
+plot(time_plot_s, vel_hat_t * c_t_r);
+xlabel('Time [s]');
+ylabel('Radial velocity [rad/s]');
+
+
+subplot(3, 1, 3); 
+plot(time_plot_s, alpha_hat_t * c_t_r);
+xlabel('Time [s]');
+ylabel('Radial acceleration [rad/s^2]');
 
 
 end
