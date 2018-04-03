@@ -235,7 +235,7 @@ void last_readings(
   }
 }
 
-//void get_readings(
+// void get_readings(
 //  ADC_Reader* reader,
 //  int* channel_0,
 //  int* channel_1)

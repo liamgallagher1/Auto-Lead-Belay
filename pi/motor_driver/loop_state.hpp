@@ -42,7 +42,7 @@ typedef struct LoopState {
 
 
   double lm_pos_r;
-  double sm_vel_est_rs;
+  double lm_vel_est_rs;
 
   // Duty cycles in percents
   float la_duty_cycle;

@@ -2,6 +2,8 @@
 #include <cmath>
 #include <iostream>
 #include <signal.h>
+#include <string.h>
+#include <string>
 #include <thread>
 
 
@@ -13,6 +15,7 @@ extern "C"
 #include "rotary_encoder.h"
 }
 #include "adc_reader.hpp"
+#include "loop_state.hpp"
 #include "time_functions.hpp"
 
 #define SAMPLING_FREQ_HZ 400 
@@ -70,13 +73,25 @@ extern "C"
 #define BOARD_4_R7 330000.0
 
 
-volatile long encoder_count_1 = 0;
-volatile long encoder_count_2 = 0;
+volatile long lm_encoder_count = 0;
+volatile long sm_encoder_count = 0;
 
 Pi_Renc_t* rot_encoder_1;
 Pi_Renc_t* rot_encoder_2;
 
 ADC_Reader* adc_reader;
+
+int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_2_MISO, MOTOR_1_MISO};
+int channel_0[3] = {-1, -1, -1};
+int channel_1[3] = {-1, -1, -1};
+double raw_current_readings[3] = {-1.0, -1.0, -1.0};
+double amp_current_readings[3] = {-1.0, -1.0, -1.0};
+bool use_amp_readings[3] = {false, false, false};
+
+// Time that we started the current loop,
+struct timespec curr_loop_time;
+// Number of this iteration
+int num_iters = 0;
 
 // Returns 0 if okay
 int init_motors(void)
@@ -112,12 +127,12 @@ int init_motors(void)
 // This should all be C++
 void encoder_callback_1(int dir)
 {
-  encoder_count_1 += dir;
+  lm_encoder_count += dir;
 }
 
 void encoder_callback_2(int dir)
 {
-  encoder_count_2 += dir;
+  sm_encoder_count += dir;
 }
 
 void init_encoders()
@@ -189,6 +204,18 @@ void current_calculations(
   use_amped_est[2] = true; // TODO, consider saturation limits
 }
 
+void add_loop_state(vector<LoopState>& history) 
+{
+  LoopState ls;
+  ls.la_raw_adc = channel_1[0];
+  ls.la_amp_adc = channel_0[0];
+  ls.sm_raw_adc = channel_0[1];
+  ls.sm_amp_adc = channel_1[1];
+  ls.lm_raw_adc = channel_1[2];
+  ls.lm_raw_adc = channel_0[2];
+  history.push_back(ls);
+}
+
 void cancel_encoders(void)
 {
   Pi_Renc_cancel(rot_encoder_1);
@@ -208,8 +235,11 @@ void exit_handler(int s)
   cancel_encoders();
   gpioTerminate();
 
-
   // Free adc reader
+  free_adc_reader(adc_reader);
+  if (s == 0) {
+    return;
+  }
   exit(s);
 }
 
@@ -224,7 +254,11 @@ void init_exit_handler(void)
 
 int main(int argc, char *argv[])
 {
-  int num_iters = 0;
+  if (argc < 2) {
+    cout << "Include an argument 0 if you don't want to output a log or 1 if you want to output a log" << endl;
+    return 1;
+  }
+  bool make_log = strcmp(argv[1], "0");
 
   gpioCfgClock(CLK_MICROS, 1, 0);
   if (gpioInitialise() < 0) {
@@ -233,17 +267,13 @@ int main(int argc, char *argv[])
   }
   init_exit_handler();
 
-  int init_pwm_success = !init_motors();
-
+  vector<LoopState> history;
+  if (make_log) {
+    // Instead of dynamic memory allocation
+    history.reserve(static_cast<long>(round(SAMPLING_FREQ_HZ * RUN_FOR_TIME_SEC * 1.01)));
+  }
   init_encoders();
-
-  int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_2_MISO, MOTOR_1_MISO};
-  int channel_0[3] = {-1, -1, -1};
-  int channel_1[3] = {-1, -1, -1};
-  double raw_current_readings[3] = {-1.0, -1.0, -1.0};
-  double amp_current_readings[3] = {-1.0, -1.0, -1.0};
-  bool use_amp_readings[3] = {false, false, false};
-
+  
   adc_reader = init_adc_reader(
     ADC_CS,
     miso_pins,
@@ -252,6 +282,7 @@ int main(int argc, char *argv[])
     ADC_CLK,
     1); // non reapeating adc reader
 
+  int init_pwm_success = !init_motors();
   cout << "Init success?: Motors: " << init_pwm_success << 
     ", and adc: " << (adc_reader != NULL) << endl;
 
@@ -269,7 +300,7 @@ int main(int argc, char *argv[])
 
   long adc_loop_freq_iters = static_cast<long>(
       round(1.0 / (ADC_FREQ_HZ * loop_wait_time_sec)));
-  
+ 
   cout << "Sampling freq HZ and period nsec: " <<
     SAMPLING_FREQ_HZ << "\t"  << loop_wait_time_nsec << endl;
   cout << "Print freq HZ and num iters: " << 
@@ -277,6 +308,7 @@ int main(int argc, char *argv[])
   cout << "ADC freq and num iters: " << 
     (1.0 / (adc_loop_freq_iters * loop_wait_time_sec)) << ", " 
     << adc_loop_freq_iters << endl;
+  
 
   /**
   * Use timespec to wait for precise amounts of time
@@ -285,9 +317,7 @@ int main(int argc, char *argv[])
   struct timespec start_time;
   // Time to stop running;
   struct timespec finish_time;
-  // Time that we started the current loop,
-  struct timespec curr_loop_time;
-  // Current time, if we are waiting for the loop's period to expire
+    // Current time, if we are waiting for the loop's period to expire
   struct timespec curr_time;
   // Time to start next loop. Always add to it the proper number of nanoseconds.
   struct timespec next_loop_time;  
@@ -313,20 +343,24 @@ int main(int argc, char *argv[])
 
     // Print if its time to do so
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "\nCounts:"  << encoder_count_1 << "\t " << encoder_count_2 << "\nADC1:\t" <<
+      cout << "\nCounts:"  << lm_encoder_count << "\t " << sm_encoder_count << 
+        "\nADC1:\t" <<
             channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
             channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
             channel_0[2] << "\t" << channel_1[2] << 
             "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
             "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
             "\nLarge Motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
-
     }
+
+
     if ((num_iters % adc_loop_freq_iters) == 0) {
       last_readings(adc_reader, channel_0, channel_1);
       current_calculations(channel_0, channel_1, 
           raw_current_readings, amp_current_readings, use_amp_readings);
     }
+
+    if (make_log) add_loop_state(history);
 
     // Loop timing code
     do{
@@ -341,8 +375,18 @@ int main(int argc, char *argv[])
   // Turn off PWM?
   // Don't forget to kill the encoder count process before exiting
   // Pi_Renc_cancel(renc);
- 
+  
   exit_handler(0);
+  
+  if (make_log) {
+    cout << "generating log" << endl;
+    if (argc == 2) {
+      write_loops_to_file(history, string("sys_test"));
+    } else {
+      write_loops_to_file(history, string(argv[2]));
+    }
+  }
+
   return 0;
 }
 

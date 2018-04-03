@@ -22,8 +22,8 @@ simple_reader: simple_reader.o adc_reader.o
 queue_estimator: queue_estimator.o rotary_encoder.o queue.o adc_reader.o loop_state.o 
 		$(CPPC)  $(CFLAGS) -o queue_estimator queue_estimator.o queue.o rotary_encoder.o adc_reader.o loop_state.o $(LIBS)
 
-integrate: integrate.o rotary_encoder.o adc_reader.o
-	$(CPPC) $(CFLAGS) -o integrate integrate.o rotary_encoder.o adc_reader.o $(LIBS)
+integrate: integrate.o  adc_reader.o loop_state.o rotary_encoder.o
+	$(CPPC) $(CFLAGS) -o integrate integrate.o adc_reader.o loop_state.o rotary_encoder.o  $(LIBS)
 
 rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)
