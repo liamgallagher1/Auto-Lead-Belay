@@ -86,13 +86,13 @@ extern "C"
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
 // Speed up to this voltage
-#define MAX_PWM 0.5
+#define MAX_PWM 1.0
 // Takeing this much time
 #define RAMP_TIME 10 
 // Then wait this long
 #define WAIT_TIME 5
 // Then go in the other direction, then wait again
-#define CHIRP_AMP 0.5
+#define CHIRP_AMP 0.8
 #define CHIRP_START_OMEGA 0.05 // 20 second period
 #define CHIRP_END_OMEGA  1    // To 1 second period
 #define CHIRP_TIME      60    // Over 60 seconds
@@ -237,13 +237,18 @@ if (gpioInitialise() < 0) {
     }
     // Set pwms
     // Safe linear actuator duty cycle
-    int la_pwm = set_la_dc(get_la_dc(LIN_ACT_MAX_A));
+    // int la_pwm = set_la_dc(get_la_dc(LIN_ACT_MAX_A));
     // Small motor identification
-    float sm_dc = identification_dc(&start_time);
-    int sm_pwm = set_sm_dc(sm_dc); 
-    
-    if (la_pwm) cout << "PWM Set for LA failed" << endl;
-    if (sm_pwm) cout << "PWM Set for SM failed" << endl;
+    // float sm_dc = identification_dc(&start_time);
+    // int sm_pwm = set_sm_dc(sm_dc); 
+   
+    // large motor identification
+    float lm_dc = identification_dc(&start_time);
+    int lm_pwm = set_lm_dc(lm_dc); 
+
+    // if (la_pwm) cout << "PWM Set for LA failed" << endl;
+    // if (sm_pwm) cout << "PWM Set for SM failed" << endl;
+    if (lm_pwm) cout << "PWM Set for LM failed" << endl;
 
 //    // turn off
 //    if (num_iters % 8000 == 0) {
@@ -266,13 +271,13 @@ if (gpioInitialise() < 0) {
     if ((num_iters % print_loop_freq_iters) == 0) {
       cout << "\nCounts:"  << lm_encoder_count << "\t " << sm_encoder_count << 
         "\nADC1:\t" <<
-            channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
-            channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
+            //channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
+            //channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
             channel_0[2] << "\t" << channel_1[2] << 
-            "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
-            "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
+            //"\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
+            //"\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
             "\nLarge Motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
-      cout << "sm_dc: " <<  sm_dc << endl;
+      cout << "lm_pwm: " <<  lm_dc << endl;
     }
 
     if (make_log) add_loop_state(history);
@@ -482,8 +487,8 @@ float identification_dc(struct timespec* init_loop_time)
     return -0.0;
   } else {
     float chirp_time_s = time_s - RAMP_TIME * 2 - WAIT_TIME * 2;
-    float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) (CHIRP_TIME * CHIRP_TIME);
-    return MAX_PWM * sin(CHIRP_START_OMEGA + chirp_const * chirp_time_s * chirp_time_s);
+    float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) CHIRP_TIME;
+    return MAX_PWM * sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
   }
 }
 
