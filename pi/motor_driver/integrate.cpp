@@ -79,21 +79,30 @@ extern "C"
 #define MOTOR_1_AMP  3.3686
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
-
+// Raw encoder counts
 volatile long lm_encoder_count = 0;
 volatile long sm_encoder_count = 0;
 
+// Encoder Pointers
 Pi_Renc_t* rot_encoder_1;
 Pi_Renc_t* rot_encoder_2;
 
+// ADC Pointer
 ADC_Reader* adc_reader;
 
+// ADC info in
 int miso_pins[3] = {LIN_ACT_ADC_MISO, MOTOR_2_MISO, MOTOR_1_MISO};
+// 12 Bit ADC values out
 int channel_0[3] = {-1, -1, -1};
-int channel_1[3] = {-1, -1, -1};
+int channel_1[3] = {-1, -1, -1}; 
+// Current estimates from that
 double raw_current_readings[3] = {-1.0, -1.0, -1.0};
+// Amplified versions
 double amp_current_readings[3] = {-1.0, -1.0, -1.0};
+// But do we use the amplified version or is it saturated
 bool use_amp_readings[3] = {false, false, false};
+// Current estimates out
+double best_current_readings[3] = {-1.0, -1.0, -1.0};
 
 // Time that we started the current loop,
 struct timespec curr_loop_time;
@@ -112,7 +121,8 @@ void current_calculations(
     int* channel_1_in,
     double* raw_current_out,
     double* amplified_current_out,
-    bool*  use_amped_est);
+    bool*  use_amped_est,
+    double* best_current_out);
 
 void add_loop_state(vector<LoopState>& history);
 void cancel_encoders(void);
@@ -233,7 +243,7 @@ int main(int argc, char *argv[])
     if ((num_iters % adc_loop_freq_iters) == 0) {
       last_readings(adc_reader, channel_0, channel_1);
       current_calculations(channel_0, channel_1, 
-          raw_current_readings, amp_current_readings, use_amp_readings);
+          raw_current_readings, amp_current_readings, use_amp_readings, best_current_readings);
     }
 
     if (make_log) add_loop_state(history);
@@ -320,7 +330,8 @@ void current_calculations(
     int* channel_1_in,
     double* raw_current_out,
     double* amplified_current_out,
-    bool*  use_amped_est)
+    bool*  use_amped_est_out,
+    double* best_current_out)
 {
   const double MPC_D_TO_V = 3.3 / 4095.0; // 12 BITS
   const double VNH5019_V_TO_A = 1.0 / .140; // 140 mV/A when driving
@@ -337,8 +348,7 @@ void current_calculations(
   double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[0] = la_raw_a;
   amplified_current_out[0] = la_amp_a;
-  use_amped_est[0] = la_amp_v < 3.0 && la_raw_v < 0.5;
-
+  use_amped_est_out[0] = la_amp_v < 3.0 && la_raw_v < 0.5;
 
   // Small Motor Calculations
   int sm_raw_d = channel_0_in[1];  
@@ -354,7 +364,7 @@ void current_calculations(
   double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[1] = sm_raw_a;
   amplified_current_out[1] = sm_amp_a;
-  use_amped_est[1] = sm_amp_v < 3.0 && sm_raw_v < 0.5;
+  use_amped_est_out[1] = sm_amp_v < 3.0 && sm_raw_v < 0.5;
 
 
   // Large Motor Calculations
@@ -377,7 +387,10 @@ void current_calculations(
 
   raw_current_out[2] = lm_raw_a;
   amplified_current_out[2] = lm_amp_a;
-  use_amped_est[2] = lm_amp_v > 0.3 && lm_amp_v < 3.0; 
+  use_amped_est_out[2] = lm_amp_v > 0.3 && lm_amp_v < 3.0; 
+  for (unsigned int i = 0; i < 3; ++i) {
+    best_current_out[i] = use_amped_est_out[i] ? amplified_current_out[i] : raw_current_out[i];
+  }
 }
 void add_loop_state(vector<LoopState>& history) 
 {
@@ -392,9 +405,9 @@ void add_loop_state(vector<LoopState>& history)
   ls.lm_raw_adc = channel_1[2];
   ls.lm_amp_adc = channel_0[2];
 
-  ls.la_current = use_amp_readings[0] ? amp_current_readings[0] : raw_current_readings[0];
-  ls.sm_current = use_amp_readings[1] ? amp_current_readings[1] : raw_current_readings[1];
-  ls.lm_current = use_amp_readings[2] ? amp_current_readings[2] : raw_current_readings[2];
+  ls.la_current = best_current_readings[0];
+  ls.sm_current = best_current_readings[1];
+  ls.lm_current = best_current_readings[2];
   
   ls.lm_count = lm_encoder_count;
   ls.sm_count = sm_encoder_count;

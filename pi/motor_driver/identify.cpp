@@ -62,10 +62,12 @@ extern "C"
 #define ENCODER_1_A 16
 #define ENCODER_1_B 12
 #define ENCODER_1_X 7
+#define ENCODER_2_CPR 8192
 
 #define ENCODER_2_A 8
 #define ENCODER_2_B 25
 #define ENCODER_2_X 24
+#define ENCODER_2_CPR 8192
 
 // Resistors
 #define BOARD_2_R1 100000.0  // Nominal Resistor Values, worth identifing.
@@ -97,11 +99,14 @@ extern "C"
 #define CHIRP_END_OMEGA  1    // To 1 second period
 #define CHIRP_TIME      60    // Over 60 seconds
 
-
-volatile long lm_encoder_count = 0;
+// Encoder 1
 volatile long sm_encoder_count = 0;
+// Encoder 1
+volatile long lm_encoder_count = 0;
+
 
 Pi_Renc_t* rot_encoder_1;
+
 Pi_Renc_t* rot_encoder_2;
 
 ADC_Reader* adc_reader;
@@ -235,49 +240,34 @@ if (gpioInitialise() < 0) {
       current_calculations(channel_0, channel_1, 
           raw_current_readings, amp_current_readings, use_amp_readings);
     }
+
+
     // Set pwms
     // Safe linear actuator duty cycle
     // int la_pwm = set_la_dc(get_la_dc(LIN_ACT_MAX_A));
     // Small motor identification
-    // float sm_dc = identification_dc(&start_time);
-    // int sm_pwm = set_sm_dc(sm_dc); 
+    float sm_dc = identification_dc(&start_time);
+    int sm_pwm = set_sm_dc(sm_dc); 
    
     // large motor identification
-    float lm_dc = identification_dc(&start_time);
-    int lm_pwm = set_lm_dc(lm_dc); 
+    // float lm_dc = identification_dc(&start_time);
+    // int lm_pwm = set_lm_dc(lm_dc); 
 
     // if (la_pwm) cout << "PWM Set for LA failed" << endl;
-    // if (sm_pwm) cout << "PWM Set for SM failed" << endl;
-    if (lm_pwm) cout << "PWM Set for LM failed" << endl;
-
-//    // turn off
-//    if (num_iters % 8000 == 0) {
-//      gpioWrite(MOTOR_1_DIR, !motor_1_dir);
-//      gpioWrite(MOTOR_2_DIR, !motor_1_dir);
-//      gpioWrite(LIN_ACT_DIR, !motor_1_dir);
-//      motor_1_dir = !motor_1_dir;
-//
-//      gpioPWM(MOTOR_1_PWM, 0);
-//      gpioPWM(MOTOR_2_PWM, 0);
-//      gpioPWM(LIN_ACT_PWM, 0);
-//    // turn on
-//    } else if (num_iters % 8000 == 500) {
-//      gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * 0.40));
-//      gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * 0.6));
-//      gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * 0.8));
-//    }
+    if (sm_pwm) cout << "PWM Set for SM failed" << endl;
+    //if (lm_pwm) cout << "PWM Set for LM failed" << endl;
 
     // Print if its time to do so
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "\nCounts:"  << lm_encoder_count << "\t " << sm_encoder_count << 
-        "\nADC1:\t" <<
+      cout << "\nCounts:"  << "\t " << sm_encoder_count << lm_encoder_count <<  
+        "\nADC2:\t" <<
             //channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
-            //channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
-            channel_0[2] << "\t" << channel_1[2] << 
+            channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
+            //channel_0[2] << "\t" << channel_1[2] << 
             //"\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
-            //"\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
-            "\nLarge Motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
-      cout << "lm_pwm: " <<  lm_dc << endl;
+            "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << endl; 
+            //"\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
+      cout << "sm_pwm: " <<  sm_dc << endl;
     }
 
     if (make_log) add_loop_state(history);
@@ -344,18 +334,19 @@ int init_motors(void)
 // This should all be C++
 void encoder_callback_1(int dir)
 {
-  lm_encoder_count += dir;
+  sm_encoder_count += dir;
 }
 
 void encoder_callback_2(int dir)
 {
-  sm_encoder_count += dir;
+  lm_encoder_count += dir;
 }
 
 void init_encoders()
 {
   // Encoder state and initalization
   rot_encoder_1 = Pi_Renc(ENCODER_1_A, ENCODER_1_B, encoder_callback_1);
+  
   rot_encoder_2 = Pi_Renc(ENCODER_2_A, ENCODER_2_B, encoder_callback_2);
 }
 
@@ -488,7 +479,8 @@ float identification_dc(struct timespec* init_loop_time)
   } else {
     float chirp_time_s = time_s - RAMP_TIME * 2 - WAIT_TIME * 2;
     float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) CHIRP_TIME;
-    return MAX_PWM * sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
+    float dc = sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
+    return MAX_PWM * dc * dc; 
   }
 }
 
@@ -509,8 +501,8 @@ void add_loop_state(vector<LoopState>& history)
   ls.sm_current = use_amp_readings[1] ? amp_current_readings[1] : raw_current_readings[1];
   ls.lm_current = use_amp_readings[2] ? amp_current_readings[2] : raw_current_readings[2];
   
-  ls.lm_count = lm_encoder_count;
   ls.sm_count = sm_encoder_count;
+  ls.lm_count = lm_encoder_count;
  
   ls.sm_pos_r = -1;
   ls.sm_vel_est_rs = -1;
