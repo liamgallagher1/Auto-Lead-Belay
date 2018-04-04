@@ -25,6 +25,10 @@ queue_estimator: queue_estimator.o rotary_encoder.o queue.o adc_reader.o loop_st
 integrate: integrate.o  adc_reader.o loop_state.o rotary_encoder.o
 	$(CPPC) $(CFLAGS) -o integrate integrate.o adc_reader.o loop_state.o rotary_encoder.o  $(LIBS)
 
+identify: identify.o  adc_reader.o loop_state.o rotary_encoder.o
+	$(CPPC) $(CFLAGS) -o identify identify.o adc_reader.o loop_state.o rotary_encoder.o  $(LIBS)
+
+
 rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 	gcc $(CFLAGS) -c rotary_encoder.c $(LIBS)
 
@@ -57,6 +61,10 @@ pwm_driver.o: pwm_driver.cpp pwm_driver.hpp
 
 integrate.o: integrate.cpp rotary_encoder.h time_functions.hpp
 	$(CPPC) $(CFLAGS) -c integrate.cpp $(LIBS)
+
+identify.o: identify.cpp rotary_encoder.h time_functions.hpp
+	$(CPPC) $(CFLAGS) -c identify.cpp $(LIBS)
+
 
 clean:
 		-rm -f *.o
