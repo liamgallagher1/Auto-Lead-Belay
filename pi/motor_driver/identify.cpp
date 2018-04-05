@@ -19,7 +19,7 @@ extern "C"
 #define SAMPLING_FREQ_HZ 1000 
 #define ADC_FREQ_HZ 1000 // must be less than or equal
 #define PRINT_FREQ_HZ 5
-#define RUN_FOR_TIME_SEC 90
+#define RUN_FOR_TIME_SEC 120
 #define CLK_MICROS 1 // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
 
 // The big motor
