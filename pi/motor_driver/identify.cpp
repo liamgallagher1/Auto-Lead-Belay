@@ -5,8 +5,6 @@
 #include <string.h>
 #include <string>
 #include <thread>
-
-
 #include <pigpio.h>
 
 // Source is in C 
@@ -259,7 +257,7 @@ if (gpioInitialise() < 0) {
 
     // Print if its time to do so
     if ((num_iters % print_loop_freq_iters) == 0) {
-      cout << "\nCounts:"  << "\t " << sm_encoder_count << lm_encoder_count <<  
+      cout << "\nCounts:"  << sm_encoder_count << "\t " << lm_encoder_count <<  
         "\nADC2:\t" <<
             //channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
             channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
