@@ -16,13 +16,13 @@ extern "C"
 #include "loop_state.hpp"
 #include "time_functions.hpp"
 
-#define SAMPLING_FREQ_HZ 1000 
-#define ADC_FREQ_HZ 1000 // must be less than or equal
-#define PRINT_FREQ_HZ 5
-#define RUN_FOR_TIME_SEC 120
+#define SAMPLING_FREQ_HZ 2000 
+#define ADC_FREQ_HZ 2000 // must be less than or equal
+#define PRINT_FREQ_HZ 4
+#define RUN_FOR_TIME_SEC 210
 #define CLK_MICROS 1 // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
 
-// The big motor
+// The small motor?
 #define MOTOR_1_PWM 18 // Only pin capable of hardware PWM on our model. 
 #define MOTOR_1_DIR 15
 #define MOTOR_1_FLIP_DIR 1 // Change the sign of this to flip all motor command directions
@@ -30,8 +30,9 @@ extern "C"
 #define MOTOR_1_RANGE 250
 #define MOTOR_1_MISO 9
 #define MOTOR_1_MAX_V 12.0
+#define MOTOR_1_MAX_CURRENT 5.0
 
-// The small motor
+// The large motor?
 #define MOTOR_2_PWM 6
 #define MOTOR_2_DIR 13
 #define MOTOR_2_FLIP_DIR 1
@@ -39,7 +40,7 @@ extern "C"
 #define MOTOR_2_RANGE 250
 #define MOTOR_2_MISO 11
 #define MOTOR_2_MAX_V 12.0
-#define LM_MAX_CURRENT 20.0
+#define LM_MAX_CURRENT 15.0
 
 // The linear actuator
 #define LIN_ACT_PWM 22
@@ -87,16 +88,17 @@ extern "C"
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
 // Speed up to this voltage
-#define MAX_PWM 0.15
+#define MAX_PWM 0.08
 // Takeing this much time
-#define RAMP_TIME 20 
+#define RAMP_TIME 10 
 // Then wait this long
-#define WAIT_TIME 10
+#define WAIT_TIME 5
 // Then go in the other direction, then wait again
-#define CHIRP_AMP 0.33
-#define CHIRP_START_OMEGA 0.05 // 20 second period
-#define CHIRP_END_OMEGA  1    // To 1 second period
-#define CHIRP_TIME      60    // Over 60 seconds
+#define CHIRP_AMP 1.0
+#define CHIRP_START_OMEGA 0.01 // 20 second period
+#define CHIRP_END_OMEGA  5    // To 1 second period
+#define CHIRP_TIME      180    // Over 60 seconds
+#define CHIRP_OFFSET 0.08
 
 // Encoder 1
 volatile long sm_encoder_count = 0;
@@ -481,7 +483,7 @@ float identification_dc(struct timespec* init_loop_time)
     float chirp_time_s = time_s - RAMP_TIME * 2 - WAIT_TIME * 2;
     float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) CHIRP_TIME;
     float dc = sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
-    return MAX_PWM * dc; 
+    return MAX_PWM * dc + CHIRP_OFFSET; 
   }
 }
 
