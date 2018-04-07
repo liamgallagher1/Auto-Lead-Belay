@@ -88,7 +88,7 @@ extern "C"
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
 // Speed up to this voltage
-#define MAX_PWM 0.08
+#define MAX_PWM 0.05
 // Takeing this much time
 #define RAMP_TIME 10 
 // Then wait this long
@@ -98,7 +98,7 @@ extern "C"
 #define CHIRP_START_OMEGA 0.01 // 20 second period
 #define CHIRP_END_OMEGA  5    // To 1 second period
 #define CHIRP_TIME      180    // Over 60 seconds
-#define CHIRP_OFFSET 0.08
+#define CHIRP_OFFSET 0.065
 
 // Encoder 1
 volatile long sm_encoder_count = 0;
@@ -442,7 +442,7 @@ int set_la_dc(float dc)
  */
 int set_lm_dc(float dc)
 {
-  if (raw_current_readings[2] > LM_MAX_CURRENT) {
+  if (abs(raw_current_readings[2]) > LM_MAX_CURRENT) {
     dc = 0.0;
   }
   int lm_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * abs(dc)));
