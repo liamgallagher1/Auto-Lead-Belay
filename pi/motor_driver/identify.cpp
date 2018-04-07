@@ -88,16 +88,16 @@ extern "C"
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
 // Speed up to this voltage
-#define MAX_PWM 0.09
+#define MAX_PWM 0.12
 // Takeing this much time
 #define RAMP_TIME 10 
 // Then wait this long
 #define WAIT_TIME 5
 // Then go in the other direction, then wait again
 #define CHIRP_AMP 1.0
-#define CHIRP_START_OMEGA 0.05 // 20 second period
-#define CHIRP_END_OMEGA  5    // To 1 second period
-#define CHIRP_TIME      60    // Over 60 seconds
+#define CHIRP_START_OMEGA 0.01 // 20 second period
+#define CHIRP_END_OMEGA  1.5    // To 1 second period
+#define CHIRP_TIME      90    // Over 60 seconds
 #define CHIRP_OFFSET 0.0
 
 // Encoder 1
