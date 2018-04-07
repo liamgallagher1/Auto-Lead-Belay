@@ -37,12 +37,14 @@ static double MOTOR_1_MAX_V = 12.0;
   // The small motor
 static int MOTOR_2_PWM = 6;
 static int MOTOR_2_DIR = 13;
-static int MOTOR_2_FLIP_DIR = 1;
+static int MOTOR_2_FLIP_DIR = -1;
 static int MOTOR_2_FREQ  = 4000;
 static int MOTOR_2_RANGE = 250;
 static int MOTOR_2_MISO = 11;
-static double MOTOR_2_MAX_V = 12.0;
-  
+static double MOTOR_2_MAX_V = 36.0;
+static double LM_MAX_CURRENT = 20.0;
+static double MOTOR_2_MAX_DC = 0.07;
+
   // The linear actuator
 static int LIN_ACT_PWM = 22;
 static int LIN_ACT_DIR = 23;
@@ -88,7 +90,7 @@ static double SPOOL_A = -5.492535985428214E-6;
 
 // Control constants
 // Pull in all the slack every 10 seconds
-static double SLACK_PULLIN_FREQ = 0.1;
+static double SLACK_PULLIN_FREQ = 0.001;
 // Pull it in for two seconds
 static double SLACK_PULLIN_TIME = 2.5;
 // Ramp up the upper pulley duty cycle at this rate
@@ -100,19 +102,26 @@ static double SLACK_PULLIN_WAIT_TIME = 0.25;
 // And then its safe to say, zero the slack count
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
- // implicit a_1 = 1.0 filter term included unecessarily 
+// implicit a_1 = 1.0 filter term included unecessarily 
 
 #define VEL_ESTIMATOR_ORDER 12
-static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
 0.44208645453822,   1.38909532117318,   2.87691408194143,   3.889125113741699,
 3.51644741566978,   1.42261659560292,  -1.42261659560293,  -3.516447415669782,
 -3.88912511374170,  -2.87691408194142,  -1.38909532117317,  -0.442086454538223};
   
-static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
 1.00000000000000,  -3.17982272939940,   5.61340285861649,  -6.315411849080975,
 4.98086610070146,  -2.76846489658377,   1.07782232448954,  -0.271450917539567,
 0.03497430111834,   0.00140921627291,  -0.00114069211714,   0.000118263210588};
 
+static double SPOOL_K_1 =   16.985738033472792; 
+
+static double SPOOL_K_2 = 2.694911533586805;
+
+
+static double NOMINAL_ROPE_SLACK = 0.25;
+static double FRICTION_OFFSET_V =  -0.598923724595684; // Acounts for columb friction
 
 // Dynamic Global Variables. I regret their existance. 
 
@@ -126,7 +135,7 @@ double sm_theta = 0.0;
 double lm_theta = 0.0;
 
 // Calculated from sm_theta [m]
-double rope_out = 0.0;
+double rope_out = NOMINAL_ROPE_SLACK; //0.0;
 // Amount of slack between the upper pulley and main spool
 double up_slack = 0.0;
 // Previous encoder counts to calculate the delta on the rope out
@@ -147,7 +156,7 @@ double amp_current_readings[3] = {-1.0, -1.0, -1.0};
 bool use_amp_readings[3] = {false, false, false};
 
 
-float pwm_commands[3] = {0.0, 0.0, 0.0};
+double pwm_commands[3] = {0.0, 0.0, 0.0};
 // Time that we started the current loop,
 struct timespec curr_loop_time;
 // Number of this iteration
@@ -178,8 +187,8 @@ Queue* prev_spool_vel_ests_rs;
 Queue* prev_spool_pos_obs_rad;
 Queue* prev_up_vel_ests_rs;
 Queue* prev_up_pos_obs_rad;
-float spool_omega = 0.0;
-float up_omega = 0.0;
+double spool_omega = 0.0;
+double up_omega = 0.0;
 
 // Control information
 long init_pullin_count = 0;
@@ -207,21 +216,19 @@ void exit_handler(int s);
 void init_exit_handler(void);
 
 // Set the duty cycles (percents) for each actuator
-int set_la_dc(float dc);
-int set_lm_dc(float dc);
-int set_sm_dc(float dc);
-float identification_dc(struct timespec* init_loop_time);
-float get_la_dc(float desired_current_a);
+int set_la_dc(double dc);
+int set_lm_dc(double dc);
+int set_sm_dc(double dc);
+double identification_dc(struct timespec* init_loop_time);
+double get_la_dc(double desired_current_a);
 
 // Estimation and Control logic
 void update_vel_estimates(void);
-
 void update_slack_count(void); 
-
 // Gives duty cycle for upper pulley if its time to pull in slack.
 // Outputs true when done
-void clear_slack(float& dc, bool& done_with_pull_in);
-
+void clear_slack(double& dc, bool& done_with_pull_in);
+void control_spool(double& dc);
 
 
 // main function
@@ -338,15 +345,12 @@ void print_state(void)
 {
   cout << "\nCounts:"  << sm_encoder_count << "\t " << lm_encoder_count <<  
         "\nADC2:\t" <<
-            channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
-            channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
             channel_0[2] << "\t" << channel_1[2] << 
-      "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
-      "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
       "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << 
       "\nRope out and slack:\t" << rope_out << "\t" << up_slack <<  
       "\nPWMs:\t" << pwm_commands[0] << "\t" << pwm_commands[1] << "\t" << pwm_commands[2] << 
       "\npulling in slack?:\t" << is_pulling_in_slack <<
+      "\nthetas:\t" << sm_theta << "\t" << lm_theta <<  
       "\nvel ests:\t" << up_omega << "\t" << spool_omega << 
       endl;
 }
@@ -370,17 +374,22 @@ int main_loop(void)
   if ((num_iters % pullin_freq_iters) == 0) {
     is_pulling_in_slack = true;
     init_pullin_count = num_iters;
+    set_lm_dc(0.0); // Turn it off
   } 
   if (is_pulling_in_slack) {
     // If we are done pulling in slack, call it a day there
     bool done_with_pullin;
-    float up_dc;
+    double up_dc;
     clear_slack(up_dc, done_with_pullin);
     if (done_with_pullin) {
       is_pulling_in_slack = false;
     } 
     // Cancles command otherwise
     set_sm_dc(up_dc);
+  } else {
+    double lm_dc;
+    control_spool(lm_dc);
+    set_lm_dc(lm_dc);
   }
   //else {
   // Do some control shit here I guess.
@@ -537,18 +546,18 @@ void current_calculations(
 }
 
 
-float get_la_dc(float desired_current_a)
+double get_la_dc(double desired_current_a)
 {
-  float la_last_current = use_amp_readings[0] ? amp_current_readings[0] : raw_current_readings[0];  
-  float error = desired_current_a - la_last_current;
-  float last_dc = pwm_commands[0];
+  double la_last_current = use_amp_readings[0] ? amp_current_readings[0] : raw_current_readings[0];  
+  double error = desired_current_a - la_last_current;
+  double last_dc = pwm_commands[0];
   return fmax(0.0, fmin(1.0, last_dc + error * LIN_ACT_KP_A)); 
 }
 
 /** Sets the duty cycle for the linear actuator 
  * If the current is too high, slower it down
  */ 
-int set_la_dc(float dc)
+int set_la_dc(double dc)
 {
 // TODO add iteration check
   int lin_act_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * abs(dc)));
@@ -560,8 +569,13 @@ int set_la_dc(float dc)
 /** Sets the duty cycle for the small motor
  *
  */
-int set_lm_dc(float dc)
+int set_lm_dc(double dc)
 {
+  // Do a softer lowering of the current requirement
+  if (abs(raw_current_readings[2]) > LM_MAX_CURRENT) {
+    float percent_over = abs(raw_current_readings[2]) / LM_MAX_CURRENT;
+    dc = dc / percent_over / percent_over;
+  }
   int lm_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * abs(dc)));
   int lm_dir = gpioWrite(MOTOR_1_DIR, dc * MOTOR_1_FLIP_DIR > 0);
   pwm_commands[2] = dc;
@@ -569,7 +583,7 @@ int set_lm_dc(float dc)
 }
 
 // You get it
-int set_sm_dc(float dc)
+int set_sm_dc(double dc)
 {
   int sm_pwm = gpioPWM(MOTOR_2_PWM, round(MOTOR_2_RANGE * abs(dc)));
   int sm_dir = gpioWrite(MOTOR_2_DIR, dc * MOTOR_2_FLIP_DIR > 0);
@@ -581,8 +595,8 @@ int set_sm_dc(float dc)
 void update_vel_estimates(void)
 {
   // Do IIR filter calculations
-float spool_vel_est_rs = vel_estimator_b[0] * lm_theta;
-float up_vel_est_rs = vel_estimator_b[0] * sm_theta;
+double spool_vel_est_rs = vel_estimator_b[0] * lm_theta;
+double up_vel_est_rs = vel_estimator_b[0] * sm_theta;
 
 for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
   spool_vel_est_rs += 
@@ -707,7 +721,7 @@ void update_slack_count(void)
   prev_sm_theta = sm_theta;
 }
 
-void clear_slack(float& dc, bool& done_with_pullin)
+void clear_slack(double& dc, bool& done_with_pullin)
 {
   int counts_into_pullin = num_iters - init_pullin_count + 1;
   // Its time to be done  
@@ -729,3 +743,48 @@ void clear_slack(float& dc, bool& done_with_pullin)
   done_with_pullin = false;
 }
 
+int sign(double val) {
+  return (0 < val) - (val < 0);
+}
+
+
+void control_spool(double& dc) 
+{
+  // Positive means theres too much slack
+  double delta_slack_m = up_slack - NOMINAL_ROPE_SLACK;
+  
+  double current_spool_radius_m = SPOOL_R0 - SPOOL_A * rope_out; 
+  double spool_feed_rate_ms = spool_omega * current_spool_radius_m;
+  double up_feed_rate_ms = up_omega * UP_RADIUS; 
+  // Positive means we are feeding out slack too fast right now.
+  double delta_slack_rate_ms = spool_feed_rate_ms - up_feed_rate_ms; 
+
+  double error_spool_rad = delta_slack_m / current_spool_radius_m;
+  double error_spool_rs = delta_slack_rate_ms / current_spool_radius_m;
+
+  
+  double friction_term = sign(spool_omega) * FRICTION_OFFSET_V; 
+  
+  double v_set = -1 * SPOOL_K_1 * error_spool_rad 
+                  -SPOOL_K_2 * error_spool_rs
+                  - friction_term;
+
+  dc = v_set / MOTOR_2_MAX_V; 
+  if (num_iters % print_loop_freq_iters == 2) {
+    cout << "delta_slack_m " << delta_slack_m << endl;
+    cout << "current_spool_radius_m: " << current_spool_radius_m << endl;
+    cout << "up feed rate_ms : " << up_feed_rate_ms << endl;
+    cout << "delta slack rate : " << delta_slack_rate_ms << endl;
+    cout << "errors " << error_spool_rad << "\t" << error_spool_rs << endl;
+    cout << "friction " << friction_term << endl;
+    cout << "vset " << v_set << endl;
+    cout << "dc " << dc << endl;
+  }
+
+  //
+  // Clamp
+  dc = max(min(dc, MOTOR_2_MAX_DC), -1 * MOTOR_2_MAX_DC);
+
+  //
+  // U = -K * (x - xdes) + u_ff
+}
