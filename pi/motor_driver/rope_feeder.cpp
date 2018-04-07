@@ -58,50 +58,49 @@ static int ADC_CS = 19;
 static int ADC_MOSI = 26;
 static int ADC_CLK = 5;
   
-  // Encoders
+// Encoders
+// small motor encoder
 static int ENCODER_1_A = 16;
 static int ENCODER_1_B = 12;
 static int ENCODER_1_X = 7;
 static int ENCODER_1_CPR = 8192;
-
+// big motor encoder
 static int ENCODER_2_A = 8;
 static int ENCODER_2_B = 25;
 static int ENCODER_2_X = 24;
 static int ENCODER_2_CPR = 8192;
 
-  // Resistors
-static double BOARD_2_R1 = 100000.0;  // Nominal Resistor Values, worth identifing.
-static double BOARD_2_R2 = 220000.0;
-  
-static double BOARD_4_R5 = 470000.0;
-static double BOARD_4_R4 = 620000.0;
-static double BOARD_4_R1 = 100000.0;
-static double BOARD_4_R3 = 330000.0;
-static double BOARD_4_R6 =  100000.0;
-static double BOARD_4_R7 = 330000.0;
-  
-  // Learned amplification constants
+// Learned amplification constants
 static double LIN_ACT_AMP = 4.5458; 
 static double MOTOR_2_AMP = 3.2912;
 static double MOTOR_1_OFFSET_V = -1.4119;
 static double MOTOR_1_AMP  = 3.3686;
 static double MOTOR_1_NO_CURRENT_V = 1.7225; 
-  
-  // Speed up to this voltage
-static double MAX_PWM = 1.0;
-  // Takeing this much time
-static double RAMP_TIME = 10; 
-  // Then wait this long
-static double WAIT_TIME = 5;
-  // Then go in the other direction, then wait again
-static double CHIRP_AMP = 0.8;
-static double CHIRP_START_OMEGA = 0.05; // = 20 second period
-static double CHIRP_END_OMEGA  = 1;    // To = 1 second period
-static double CHIRP_TIME       =  60;    // Over 60 seconds
 
+// Rope amount constants
+static double UP_RADIUS = 0.060217658443764;
+static double SPOOL_R0 =  0.185789405425864;
+static double SPOOL_A = -5.492535985428214E-6;
+
+// Dynamic Global Variables. I regret their existance. 
+
+// Encoders
 volatile long sm_encoder_count = 0;
   // Encoder 1
 volatile long lm_encoder_count = 0;
+
+// Asociated angles [rad]
+double sm_theta = 0.0;
+double lm_theta = 0.0;
+
+// Calculated from sm_theta [m]
+double rope_out = 0.0;
+// Amount of slack between the upper pulley and main spool
+double up_slack = 0.0;
+// Previous encoder counts to calculate the delta on the rope out
+double prev_sm_theta = 0;
+double prev_rope_out = 0;
+bool pulling_in_slack = false;
 
 // Dynamic Variables
 //Encoder 1
@@ -115,6 +114,7 @@ double raw_current_readings[3] = {-1.0, -1.0, -1.0};
 double amp_current_readings[3] = {-1.0, -1.0, -1.0};
 bool use_amp_readings[3] = {false, false, false};
 
+
 float pwm_commands[3] = {0.0, 0.0, 0.0};
 // Time that we started the current loop,
 struct timespec curr_loop_time;
@@ -124,8 +124,26 @@ bool make_log = false;
 string output_file = string("rope_feed_test_");
 vector<LoopState> history;
 
-int inner_loop(void);
+// Iteration information
+long print_loop_freq_iters = 0;
+long adc_loop_freq_iters = 0;
+long loop_wait_time_nsec = 0;
 
+/**
+  * Use timespec to wait for precise amounts of time
+  * Time that we started the prgram after initialization
+  */ 
+struct timespec start_time;
+// Time to stop running;
+struct timespec finish_time;
+// Current time, if we are waiting for the loop's period to expire
+struct timespec curr_time;
+// Time to start next loop. Always add to it the proper number of nanoseconds.
+struct timespec next_loop_time;  
+
+
+
+int inner_loop(void);
 int init_motors(void);
 static void encoder_callback_1(int dir);
 static void encoder_callback_2(int dir);
@@ -150,10 +168,20 @@ int set_sm_dc(float dc);
 float identification_dc(struct timespec* init_loop_time);
 float get_la_dc(float desired_current_a);
 
+// Control logic
+void update_slack_count(void); 
+
+// Gives duty cycle for upper pulley if its time to pull in slack.
+// Outputs true when done
+void clear_slack(float& dc, bool& done_with_pull_in);
+
+
+
 // main function
 int init(void);
 int main_loop(void);
-int make_logs;
+int finish_and_quit(void);
+int make_logs(void);
 
 int main(int argc, char* argv[]){
   if (argc < 2) { 
@@ -164,12 +192,19 @@ int main(int argc, char* argv[]){
   }
   make_log = strcmp(argv[1], "0"); 
   int init_failed = init();
+
   if (init_failed) return init_failed;
+  cout << "Init: " << endl;
+  while (!past_time(&curr_loop_time, &finish_time)) {
+
+    main_loop();
+  }
+
 }
 
 int init(void)
 {
-    gpioCfgClock(CLK_MICROS, 1, 0); 
+  gpioCfgClock(CLK_MICROS, 1, 0); 
   if (gpioInitialise() < 0) { 
     cout << "Failed GPIO Init" << endl;
     return 1;
@@ -200,13 +235,13 @@ int init(void)
   */
   double loop_wait_time_sec = (1.0 / SAMPLING_FREQ_HZ);
   // Time to wait per iteration
-  long loop_wait_time_nsec = static_cast<long>(
+  loop_wait_time_nsec = static_cast<long>(
       round(loop_wait_time_sec * 1E9));
   // Print out ever kth iteration 
-  long print_loop_freq_iters = static_cast<long>(
+  print_loop_freq_iters = static_cast<long>(
       round(1.0 / (PRINT_FREQ_HZ * loop_wait_time_sec)));
 
-  long adc_loop_freq_iters = static_cast<long>(
+  adc_loop_freq_iters = static_cast<long>(
       round(1.0 / (ADC_FREQ_HZ * loop_wait_time_sec)));
  
   cout << "Sampling freq HZ and period nsec: " <<
@@ -217,29 +252,64 @@ int init(void)
     (1.0 / (adc_loop_freq_iters * loop_wait_time_sec)) << ", " 
     << adc_loop_freq_iters << endl;
   
-
-  /**
-  * Use timespec to wait for precise amounts of time
-  * Time that we started the prgram after initialization
-  */ 
-  struct timespec start_time;
-  // Time to stop running;
-  struct timespec finish_time;
-    // Current time, if we are waiting for the loop's period to expire
-  struct timespec curr_time;
-  // Time to start next loop. Always add to it the proper number of nanoseconds.
-  struct timespec next_loop_time;  
- 
   clock_gettime(CLOCK_REALTIME, &curr_time);
   clock_gettime(CLOCK_REALTIME, &start_time);
   add_time(&start_time, RUN_FOR_TIME_SEC, 0, &finish_time);
   clock_gettime(CLOCK_REALTIME, &curr_loop_time);
   add_time(&curr_loop_time, 0, loop_wait_time_nsec, &next_loop_time); 
-  
+ 
+  // Wait a millisecond, you deserve a break
+  std::chrono::microseconds timespan(1000);
+  std::this_thread::sleep_for(timespan);
+
   cout << "Entering Inner Loop " << endl;
   return 0;
 }
 
+void print_state(void)
+{
+  cout << "\nCounts:"  << sm_encoder_count << "\t " << lm_encoder_count <<  
+        "\nADC2:\t" <<
+            channel_0[0] << "\t" << channel_1[0] << "\nADC2:\t" << 
+            channel_0[1] << "\t" << channel_1[1] << "\nADC3:\t" << 
+            channel_0[2] << "\t" << channel_1[2] << 
+      "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
+      "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
+      "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
+}
+
+// The main program!
+int main_loop(void)
+{
+  num_iters++;
+  // Do current calculations
+
+  if ((num_iters % adc_loop_freq_iters) == 0) {
+    last_readings(adc_reader, channel_0, channel_1);
+    current_calculations(channel_0, channel_1, 
+        raw_current_readings, amp_current_readings, use_amp_readings);
+  }
+  // TODO velocity estimation
+  // Set pwms
+  
+      // Print if its time to do so
+  if ((num_iters % print_loop_freq_iters) == 0) {
+    print_state();
+  }
+
+
+  // Log if needed
+  if (make_log) add_loop_state(history);
+
+  // Loop timing code
+  do{
+    clock_gettime(CLOCK_REALTIME, &curr_time);
+  } while(!past_time(&curr_time, &next_loop_time));
+    
+  add_time(&next_loop_time, 0, loop_wait_time_nsec, &next_loop_time);
+  curr_loop_time = curr_time;
+  return 0;
+}
 
 
 // Returns 0 if okay
@@ -399,33 +469,6 @@ int set_sm_dc(float dc)
   return sm_pwm || sm_dir;
 }
 
-
-// Slowly ramps up
-// Then stops
-// Then goes the other way. 
-// Then stops
-// Then does a chirp
-float identification_dc(struct timespec* init_loop_time)
-{
-  struct timespec elapsed_time;
-  timespec_diff(init_loop_time, &curr_loop_time, &elapsed_time); 
-  double time_s = elapsed_time.tv_sec + (elapsed_time.tv_nsec * 10E-10); 
-  if (time_s < RAMP_TIME) {
-    return MAX_PWM * time_s / RAMP_TIME;
-  } else if (time_s < RAMP_TIME + WAIT_TIME) {
-    return 0.0;
-  } else if (time_s < RAMP_TIME * 2 + WAIT_TIME) {
-    return -1 * MAX_PWM * (time_s - RAMP_TIME - WAIT_TIME) / RAMP_TIME;
-  } else if (time_s < RAMP_TIME * 2 + WAIT_TIME * 2) {
-    return -0.0;
-  } else {
-    float chirp_time_s = time_s - RAMP_TIME * 2 - WAIT_TIME * 2;
-    float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) CHIRP_TIME;
-    float dc = sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
-    return MAX_PWM * dc * dc; 
-  }
-}
-
 void add_loop_state(vector<LoopState>& history) 
 {
   LoopState ls;
@@ -493,6 +536,31 @@ void init_exit_handler(void)
   sigemptyset(&sigIntHandler.sa_mask);
   sigIntHandler.sa_flags = 0;
   sigaction(SIGINT, &sigIntHandler, NULL);
+}
+
+
+// Logic at the bottom
+void update_slack_count(void)
+{
+  sm_theta = 2 * M_PI * sm_encoder_count / ENCODER_1_CPR;
+  lm_theta = 2 * M_PI * lm_encoder_count / ENCODER_2_CPR;
+
+  // Modeled the spool as having a decreasing radius over time
+  rope_out = SPOOL_R0 / SPOOL_A * (1.0 - exp(-1 * SPOOL_A * lm_theta));
+ 
+  // How much rope was fed off the spool
+  double spool_rope_delta = rope_out - prev_rope_out;
+  // How much rope was fed through the upper pulley
+  double up_rope_delta = UP_RADIUS * (sm_theta - prev_sm_theta);
+
+  // Slack added between them
+  double slack_delta = spool_rope_delta - up_rope_delta;
+ 
+  // Update slack measurement;
+  up_slack += slack_delta;
+
+  prev_rope_out = rope_out;
+  prev_sm_theta = sm_theta;
 }
 
 
