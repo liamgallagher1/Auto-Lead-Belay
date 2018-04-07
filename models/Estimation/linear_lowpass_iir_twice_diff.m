@@ -2,12 +2,12 @@ clear;
 close all;
 
 % http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4063529
-Ts = 0.0025;
+Ts = 0.0005;
 sample_freq_hz = 1 / Ts;
 
 % Velocity filter params
 % was 150
-passband_freq_vel_hz = 150;
+passband_freq_vel_hz = 100;
 rel_cutoff_rad_vel = 2 * passband_freq_vel_hz / sample_freq_hz; 
 vel_order = 10;
 stopband_attenuation_vel_db = 100; 

@@ -65,7 +65,6 @@ for i = 4:length(time)
         num_alpha(1) * theta_obs_rad(i) + num_alpha(2) * theta_obs_rad(i - 1) + num_alpha(3) * theta_obs_rad(i - 2) + + num_alpha(4) * theta_obs_rad(i - 3);
     
     % Calculate acceleration estimate
-    
 end
 
 % diverges, shit
