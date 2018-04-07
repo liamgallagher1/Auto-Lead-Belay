@@ -10,8 +10,8 @@ HEADERS = rotary_encoder.h queue.h
 
 default: sampling_driver
 
-rope_feeder: rope_feeder.o adc_reader.o loop_state.o rotary_encoder.o
-	$(CPPC) $(CFLAGS) -o rope_feeder rope_feeder.o  adc_reader.o loop_state.o rotary_encoder.o  $(LIBS)
+rope_feeder: rope_feeder.o adc_reader.o loop_state.o rotary_encoder.o queue.o
+	$(CPPC) $(CFLAGS) -o rope_feeder rope_feeder.o  adc_reader.o loop_state.o rotary_encoder.o  queue.o $(LIBS)
 
 integrate: integrate.o  adc_reader.o loop_state.o rotary_encoder.o
 	$(CPPC) $(CFLAGS) -o integrate integrate.o adc_reader.o loop_state.o rotary_encoder.o  $(LIBS)
@@ -25,7 +25,7 @@ rotary_encoder.o: rotary_encoder.c rotary_encoder.h
 run_rope_test.o: run_rope_test.cpp 	rope_feeder.hpp
 	$(CPPC) $(CFLAGS) -c run_rope_test.cpp rope_feeder.hpp $(LIBS)
 
-rope_feeder.o: rope_feeder.cpp adc_reader.hpp loop_state.hpp rotary_encoder.h time_functions.hpp
+rope_feeder.o: rope_feeder.cpp adc_reader.hpp loop_state.hpp rotary_encoder.h time_functions.hpp queue.h
 	$(CPPC) $(CFLAGS) -c rope_feeder.cpp $(LIBS)
 
 adc_reader.o: adc_reader.cpp adc_reader.hpp
@@ -40,6 +40,8 @@ integrate.o: integrate.cpp rotary_encoder.h time_functions.hpp
 identify.o: identify.cpp rotary_encoder.h time_functions.hpp
 	$(CPPC) $(CFLAGS) -c identify.cpp $(LIBS)
 
+queue.o: queue.c queue.h
+		gcc $(CFLAGS) -c queue.c $(LIBS)
 
 clean:
 		-rm -f *.o

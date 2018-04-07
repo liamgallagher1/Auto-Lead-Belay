@@ -40,7 +40,7 @@ extern "C"
 #define MOTOR_2_RANGE 250
 #define MOTOR_2_MISO 11
 #define MOTOR_2_MAX_V 12.0
-#define LM_MAX_CURRENT 15.0
+#define LM_MAX_CURRENT 20.0
 
 // The linear actuator
 #define LIN_ACT_PWM 22
@@ -88,17 +88,17 @@ extern "C"
 #define MOTOR_1_NO_CURRENT_V 1.7225 
 
 // Speed up to this voltage
-#define MAX_PWM 0.05
+#define MAX_PWM 0.09
 // Takeing this much time
 #define RAMP_TIME 10 
 // Then wait this long
 #define WAIT_TIME 5
 // Then go in the other direction, then wait again
 #define CHIRP_AMP 1.0
-#define CHIRP_START_OMEGA 0.01 // 20 second period
-#define CHIRP_END_OMEGA  5    // To 1 second period
-#define CHIRP_TIME      180    // Over 60 seconds
-#define CHIRP_OFFSET 0.065
+#define CHIRP_START_OMEGA 0.05 // 20 second period
+#define CHIRP_END_OMEGA  15    // To 1 second period
+#define CHIRP_TIME      60    // Over 60 seconds
+#define CHIRP_OFFSET 0.0
 
 // Encoder 1
 volatile long sm_encoder_count = 0;
@@ -443,7 +443,8 @@ int set_la_dc(float dc)
 int set_lm_dc(float dc)
 {
   if (abs(raw_current_readings[2]) > LM_MAX_CURRENT) {
-    dc = 0.0;
+    float percent_over = abs(raw_current_readings[2]) / LM_MAX_CURRENT;
+    dc = dc / percent_over / percent_over; // Do a softer lowering of the current requirement
   }
   int lm_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * abs(dc)));
   int lm_dir = gpioWrite(MOTOR_1_DIR, dc * MOTOR_1_FLIP_DIR > 0);
@@ -481,6 +482,9 @@ float identification_dc(struct timespec* init_loop_time)
     return -0.0;
   } else {
     float chirp_time_s = time_s - RAMP_TIME * 2 - WAIT_TIME * 2;
+    while (chirp_time_s > CHIRP_TIME) {
+      chirp_time_s -= CHIRP_TIME;
+    }
     float chirp_const = (CHIRP_END_OMEGA - CHIRP_START_OMEGA) / (float) CHIRP_TIME;
     float dc = sin(CHIRP_START_OMEGA * chirp_time_s + chirp_const * chirp_time_s * chirp_time_s);
     return MAX_PWM * dc + CHIRP_OFFSET; 

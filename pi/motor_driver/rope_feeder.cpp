@@ -11,6 +11,7 @@
 extern "C"
 {
 #include "rotary_encoder.h"
+#include "queue.h"
 }
 #include "adc_reader.hpp"
 #include "loop_state.hpp"
@@ -98,6 +99,21 @@ static double SLACK_PULLIN_MAX_DC = 1.0;
 static double SLACK_PULLIN_WAIT_TIME = 0.25;
 // And then its safe to say, zero the slack count
 
+// Velocity filter parameters, numerator and denomenator terms of IIR filter
+ // implicit a_1 = 1.0 filter term included unecessarily 
+
+#define VEL_ESTIMATOR_ORDER 12
+static float vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
+0.44208645453822,   1.38909532117318,   2.87691408194143,   3.889125113741699,
+3.51644741566978,   1.42261659560292,  -1.42261659560293,  -3.516447415669782,
+-3.88912511374170,  -2.87691408194142,  -1.38909532117317,  -0.442086454538223};
+  
+static float vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
+1.00000000000000,  -3.17982272939940,   5.61340285861649,  -6.315411849080975,
+4.98086610070146,  -2.76846489658377,   1.07782232448954,  -0.271450917539567,
+0.03497430111834,   0.00140921627291,  -0.00114069211714,   0.000118263210588};
+
+
 // Dynamic Global Variables. I regret their existance. 
 
 // Encoders
@@ -157,6 +173,14 @@ struct timespec curr_time;
 // Time to start next loop. Always add to it the proper number of nanoseconds.
 struct timespec next_loop_time;  
 
+// Estimation
+Queue* prev_spool_vel_ests_rs; 
+Queue* prev_spool_pos_obs_rad;
+Queue* prev_up_vel_ests_rs;
+Queue* prev_up_pos_obs_rad;
+float spool_omega = 0.0;
+float up_omega = 0.0;
+
 // Control information
 long init_pullin_count = 0;
 long pullin_freq_iters = 0;
@@ -165,6 +189,7 @@ long pullin_rest_iters = 0;
 
 int inner_loop(void);
 int init_motors(void);
+int init_queues(void);
 static void encoder_callback_1(int dir);
 static void encoder_callback_2(int dir);
 void init_encoders(void);
@@ -188,7 +213,9 @@ int set_sm_dc(float dc);
 float identification_dc(struct timespec* init_loop_time);
 float get_la_dc(float desired_current_a);
 
-// Control logic
+// Estimation and Control logic
+void update_vel_estimates(void);
+
 void update_slack_count(void); 
 
 // Gives duty cycle for upper pulley if its time to pull in slack.
@@ -247,7 +274,8 @@ int init(void)
     history.reserve(static_cast<long>(round(SAMPLING_FREQ_HZ * RUN_FOR_TIME_SEC * 1.01)));
   }
   init_encoders();
-  
+  init_queues();
+
   adc_reader = init_adc_reader(
     ADC_CS,
     miso_pins,
@@ -319,6 +347,7 @@ void print_state(void)
       "\nRope out and slack:\t" << rope_out << "\t" << up_slack <<  
       "\nPWMs:\t" << pwm_commands[0] << "\t" << pwm_commands[1] << "\t" << pwm_commands[2] << 
       "\npulling in slack?:\t" << is_pulling_in_slack <<
+      "\nvel ests:\t" << up_omega << "\t" << spool_omega << 
       endl;
 }
 
@@ -332,11 +361,9 @@ int main_loop(void)
     last_readings(adc_reader, channel_0, channel_1);
     current_calculations(channel_0, channel_1, 
         raw_current_readings, amp_current_readings, use_amp_readings);
-  }
-  
+  } 
   update_slack_count();
-  
-  // TODO velocity estimation
+  update_vel_estimates(); 
   // Set pwms
 
   // If its time to pullin rope, get on it
@@ -405,6 +432,21 @@ int init_motors(void)
   return motor_1_freq && motor_1_range && motor_1_pwm &&
         motor_2_freq && motor_2_range && motor_2_pwm && 
         lin_act_freq && lin_act_range && lin_act_pwm;
+}
+
+int init_queues(void)
+{
+  prev_spool_vel_ests_rs = createQueue(VEL_ESTIMATOR_ORDER + 1); 
+  prev_spool_pos_obs_rad = createQueue(VEL_ESTIMATOR_ORDER + 1);
+  prev_up_vel_ests_rs = createQueue(VEL_ESTIMATOR_ORDER + 1);
+  prev_up_pos_obs_rad = createQueue(VEL_ESTIMATOR_ORDER + 1);
+  for (unsigned int i = 0; i < VEL_ESTIMATOR_ORDER; ++i) {
+    enqueue(prev_spool_vel_ests_rs, 0.0);
+    enqueue(prev_up_vel_ests_rs, 0.0);
+    enqueue(prev_spool_pos_obs_rad, 0.0);
+    enqueue(prev_up_pos_obs_rad, 0.0);
+  }
+  return 0;
 }
 
 // Simple Encoder Callback
@@ -534,6 +576,40 @@ int set_sm_dc(float dc)
   pwm_commands[1] = dc;
   return sm_pwm || sm_dir;
 }
+
+// Call after rope and such estimates have been made, please 
+void update_vel_estimates(void)
+{
+  // Do IIR filter calculations
+float spool_vel_est_rs = vel_estimator_b[0] * lm_theta;
+float up_vel_est_rs = vel_estimator_b[0] * sm_theta;
+
+for (unsigned int i = 1; i < VEL_ESTIMATOR_ORDER; ++i) {
+  spool_vel_est_rs += 
+    vel_estimator_b[i] * at(prev_spool_pos_obs_rad, VEL_ESTIMATOR_ORDER - i);
+   spool_vel_est_rs -= 
+    vel_estimator_a[i] * at(prev_spool_vel_ests_rs, VEL_ESTIMATOR_ORDER - i);
+ 
+  up_vel_est_rs += 
+    vel_estimator_b[i] * at(prev_up_pos_obs_rad, VEL_ESTIMATOR_ORDER - i);
+  up_vel_est_rs -= 
+    vel_estimator_a[i] * at(prev_up_vel_ests_rs, VEL_ESTIMATOR_ORDER - i);
+}
+// Cycle circular queues
+dequeue(prev_spool_pos_obs_rad);
+enqueue(prev_spool_pos_obs_rad, lm_theta);
+dequeue(prev_spool_vel_ests_rs);
+enqueue(prev_spool_vel_ests_rs, spool_vel_est_rs);
+
+dequeue(prev_up_pos_obs_rad);
+enqueue(prev_up_pos_obs_rad, sm_theta);
+dequeue(prev_up_vel_ests_rs);
+enqueue(prev_up_vel_ests_rs, up_vel_est_rs);
+
+spool_omega = spool_vel_est_rs;
+up_omega = up_vel_est_rs;
+}
+
 
 void add_loop_state(vector<LoopState>& history) 
 {
