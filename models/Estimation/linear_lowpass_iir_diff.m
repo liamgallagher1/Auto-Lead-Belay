@@ -6,7 +6,7 @@ Ts = 0.001;
 sample_freq_hz = 1 / Ts;
 
 % Want it high but not so high that the signals get too noisy
-passband_freq_hz = 450;
+passband_freq_hz = 100;
 
 rel_cutoff_rad = 2 * passband_freq_hz / sample_freq_hz; 
 

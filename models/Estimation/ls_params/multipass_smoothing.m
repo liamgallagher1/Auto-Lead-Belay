@@ -35,5 +35,3 @@ second_derv = first_derv * second_derv_mat;
 
 
 
-
-
