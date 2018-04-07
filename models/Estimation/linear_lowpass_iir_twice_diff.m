@@ -2,7 +2,7 @@ clear;
 close all;
 
 % http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4063529
-Ts = 0.005;
+Ts = 0.0005;
 sample_freq_hz = 1 / Ts;
 
 % Velocity filter params

@@ -96,7 +96,7 @@ extern "C"
 // Then go in the other direction, then wait again
 #define CHIRP_AMP 1.0
 #define CHIRP_START_OMEGA 0.05 // 20 second period
-#define CHIRP_END_OMEGA  15    // To 1 second period
+#define CHIRP_END_OMEGA  5    // To 1 second period
 #define CHIRP_TIME      60    // Over 60 seconds
 #define CHIRP_OFFSET 0.0
 
