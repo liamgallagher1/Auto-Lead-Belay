@@ -39,7 +39,8 @@ void write_loops_to_file(
       now.lm_raw_adc << ", " << now.lm_amp_adc << ", " <<  
       now.la_current << ", " << now.sm_current << ", " << 
       now.lm_current << ", " << now.sm_count << ", " << now.lm_count << ", " << 
-      now.sm_pos_r << ", " << now.sm_vel_est_rs << ", " << now.la_duty_cycle << ", " << 
+      now.sm_pos_r << ", " << now.sm_vel_est_rs << ", " << now.lm_pos_r << ", " << 
+      now.lm_vel_est_rs << ", " << now.la_duty_cycle << ", " << 
       now.sm_duty_cycle << ", " << now.lm_duty_cycle << ", " << 
       now.rope_out << "," << "\n";
   }

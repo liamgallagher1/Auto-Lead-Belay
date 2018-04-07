@@ -22,7 +22,7 @@ using namespace std;
 static int SAMPLING_FREQ_HZ = 1000; 
 static int ADC_FREQ_HZ = 1000; // must be less than or equal
 static int PRINT_FREQ_HZ = 5;
-static int RUN_FOR_TIME_SEC = 200;
+static int RUN_FOR_TIME_SEC = 30;
 static int CLK_MICROS = 1; // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
   
   // The big motor
@@ -37,13 +37,13 @@ static double MOTOR_1_MAX_V = 12.0;
   // The small motor
 static int MOTOR_2_PWM = 6;
 static int MOTOR_2_DIR = 13;
-static int MOTOR_2_FLIP_DIR = -1;
+static int MOTOR_2_FLIP_DIR = 1;
 static int MOTOR_2_FREQ  = 4000;
 static int MOTOR_2_RANGE = 250;
 static int MOTOR_2_MISO = 11;
 static double MOTOR_2_MAX_V = 36.0;
-static double LM_MAX_CURRENT = 20.0;
-static double MOTOR_2_MAX_DC = 0.07;
+static double LM_MAX_CURRENT = 6.0;
+static double MOTOR_2_MAX_DC = 0.25;
 
   // The linear actuator
 static int LIN_ACT_PWM = 22;
@@ -85,21 +85,21 @@ static double MOTOR_1_NO_CURRENT_V = 1.7225;
 
 // Rope amount constants
 //static double UP_RADIUS = 0.060217658443764;
-static double UP_RADIUS =  0.051987911789783;
-static double SPOOL_R0 =  0.185789405425864;
-static double SPOOL_A = -5.492535985428214E-6;
+static double UP_RADIUS =  0.027966354424642;
+static double SPOOL_R0 =   0.091241941472015;
+static double SPOOL_A =    -9.645565676206025E-6;
 
 // Control constants
 // Pull in all the slack every 10 seconds
-static double SLACK_PULLIN_FREQ = 0.001;
+static double SLACK_PULLIN_FREQ = 0.1;
 // Pull it in for two seconds
-static double SLACK_PULLIN_TIME = 2.5;
+static double SLACK_PULLIN_TIME = 1.5;
 // Ramp up the upper pulley duty cycle at this rate
 static double SLACK_PULLIN_DC_PER_SEC = 1.0;
 // Up to thie value
-static double SLACK_PULLIN_MAX_DC = 1.0;
+static double SLACK_PULLIN_MAX_DC = 0.80;
 // And then throttle the duty cycle back down over this time
-static double SLACK_PULLIN_WAIT_TIME = 0.25;
+static double SLACK_PULLIN_WAIT_TIME = 0.15;
 // And then its safe to say, zero the slack count
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
@@ -123,11 +123,11 @@ static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {
   19.1361903441139, -2.22680164996029, -0.318010723235478, 0.0926304179541074  
 };
 
-static double SPOOL_K_1 =   16.985738033472792; 
-static double SPOOL_K_2 = 2.694911533586805;
+static double SPOOL_K_1 = 11.085; 
+static double SPOOL_K_2 = 1.725;
 
 static double NOMINAL_ROPE_SLACK = 0.25;
-static double FRICTION_OFFSET_V =  -0.598923724595684; // Acounts for columb friction
+static double FRICTION_OFFSET_V =  0.3189; //0.598923724595684; // Acounts for columb friction
 
 // Dynamic Global Variables. I regret their existance. 
 
@@ -143,7 +143,7 @@ double lm_theta = 0.0;
 // Calculated from sm_theta [m]
 double rope_out = 0.0; // NOMINAL_ROPE_SLACK; //0.0;
 // Amount of slack between the upper pulley and main spool
-double up_slack = 0.0;
+double up_slack = NOMINAL_ROPE_SLACK; // 0.0;
 // Previous encoder counts to calculate the delta on the rope out
 double prev_sm_theta = 0;
 double prev_rope_out = 0;
@@ -350,6 +350,11 @@ int init(void)
 void print_state(void)
 {
   cout << "\nCounts:"  << sm_encoder_count << "\t " << lm_encoder_count <<  
+      "\nADC0:\t" <<
+            channel_0[0] << "\t" << channel_1[0] << 
+      "\nADC1:\t" <<
+            channel_0[1] << "\t" << channel_1[1] << 
+
         "\nADC2:\t" <<
             channel_0[2] << "\t" << channel_1[2] << 
       "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << 
@@ -508,8 +513,7 @@ void current_calculations(
   double la_amp_a = la_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[0] = la_raw_a;
   amplified_current_out[0] = la_amp_a;
-  use_amped_est[0] = la_amp_v < 3.0 && la_raw_v < 0.5;
-
+  use_amped_est[0] = 0; // la_amp_v < 3.0 && la_raw_v < 0.5;
 
   // Small Motor Calculations
   int sm_raw_d = channel_0_in[1];  
@@ -528,27 +532,27 @@ void current_calculations(
   use_amped_est[1] = 0; // sm_amp_v < 3.0 && sm_raw_v < 0.5;
 
 
-  // Large Motor Calculations
-  const double ACS709_V_TO_A = 1.0 / 0.0185; // 18.5mV/A at 3.3V
-  // Digital estimates
-  int lm_raw_d = channel_1_in[2]; 
-  int lm_amp_d = channel_0_in[2];
-  // Read Voltages
-  double lm_raw_v = lm_raw_d * MPC_D_TO_V;
-  double lm_amp_v = lm_amp_d * MPC_D_TO_V;
-  // Voltage to current from specs
-  double lm_raw_a = (lm_raw_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;  
-  
-  // Fix the amplified estimate to find v_in
-  const double a_vcc = MOTOR_1_OFFSET_V; 
-  //3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
-  double lm_fixed_amped_v = (lm_amp_v / MOTOR_1_AMP) - a_vcc; 
-  // BOARD_4_R1 /BOARD_4_R3 + a_vcc;
-  double lm_amp_a = (lm_fixed_amped_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;
+  //// Large Motor Calculations
+  //const double ACS709_V_TO_A = 1.0 / 0.0185; // 18.5mV/A at 3.3V
+  //// Digital estimates
+  //int lm_raw_d = channel_1_in[2]; 
+  //int lm_amp_d = channel_0_in[2];
+  //// Read Voltages
+  //double lm_raw_v = lm_raw_d * MPC_D_TO_V;
+  //double lm_amp_v = lm_amp_d * MPC_D_TO_V;
+  //// Voltage to current from specs
+  //double lm_raw_a = (lm_raw_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;  
+  //
+  //// Fix the amplified estimate to find v_in
+  //const double a_vcc = MOTOR_1_OFFSET_V; 
+  ////3.3 * BOARD_4_R5 / (BOARD_4_R5 + BOARD_4_R4);
+  //double lm_fixed_amped_v = (lm_amp_v / MOTOR_1_AMP) - a_vcc; 
+  //// BOARD_4_R1 /BOARD_4_R3 + a_vcc;
+  //double lm_amp_a = (lm_fixed_amped_v - MOTOR_1_NO_CURRENT_V) * ACS709_V_TO_A;
 
-  raw_current_out[2] = lm_raw_a;
-  amplified_current_out[2] = lm_amp_a;
-  use_amped_est[2] = lm_amp_v > 0.3 && lm_amp_v < 3.0; 
+  raw_current_out[2] = raw_current_out[0];// lm_raw_a;
+  amplified_current_out[2] = amplified_current_out[0]; // lm_amp_a;
+  use_amped_est[2] = 0;// lm_amp_v > 0.3 && lm_amp_v < 3.0; 
 }
 
 
@@ -578,12 +582,12 @@ int set_la_dc(double dc)
 int set_lm_dc(double dc)
 {
   // Do a softer lowering of the current requirement
-  if (abs(raw_current_readings[2]) > LM_MAX_CURRENT) {
-    float percent_over = abs(raw_current_readings[2]) / LM_MAX_CURRENT;
-    dc = dc / percent_over / percent_over;
-  }
-  int lm_pwm = gpioPWM(MOTOR_1_PWM, round(MOTOR_1_RANGE * abs(dc)));
-  int lm_dir = gpioWrite(MOTOR_1_DIR, dc * MOTOR_1_FLIP_DIR > 0);
+   if (abs(raw_current_readings[2]) > LM_MAX_CURRENT) {
+     float percent_over = abs(raw_current_readings[2]) / LM_MAX_CURRENT;
+     dc = dc / percent_over / percent_over;
+   }
+  int lm_pwm = gpioPWM(LIN_ACT_PWM, round(LIN_ACT_RANGE * abs(dc)));
+  int lm_dir = gpioWrite(LIN_ACT_DIR, dc * MOTOR_1_FLIP_DIR > 0);
   pwm_commands[2] = dc;
   return lm_pwm || lm_dir;
 }
@@ -773,7 +777,10 @@ void control_spool(double& dc)
 
   
   double friction_term = sign(spool_omega) * FRICTION_OFFSET_V; 
-  
+  if (abs(spool_omega) < 0.5) {
+    friction_term = sign(pwm_commands[2]) * FRICTION_OFFSET_V;
+  }
+
   double v_set = -1 * SPOOL_K_1 * error_spool_rad 
                   -SPOOL_K_2 * error_spool_rs
                   - friction_term;
