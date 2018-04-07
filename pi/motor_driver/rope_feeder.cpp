@@ -181,7 +181,6 @@ void clear_slack(float& dc, bool& done_with_pull_in);
 int init(void);
 int main_loop(void);
 int finish_and_quit(void);
-int make_logs(void);
 
 int main(int argc, char* argv[]){
   if (argc < 2) { 
@@ -196,8 +195,20 @@ int main(int argc, char* argv[]){
   if (init_failed) return init_failed;
   cout << "Init: " << endl;
   while (!past_time(&curr_loop_time, &finish_time)) {
-
     main_loop();
+  }
+ 
+  // Die safely
+  exit_handler(0);
+
+  // Generate Log file
+  if (make_log) {
+    cout << "generating log" << endl;
+    if (argc == 2) {
+      write_loops_to_file(history, string("sys_test"));
+    } else {
+      write_loops_to_file(history, string(argv[2]));
+    }
   }
 
 }
@@ -275,7 +286,9 @@ void print_state(void)
             channel_0[2] << "\t" << channel_1[2] << 
       "\nLinear Actu:\t" << raw_current_readings[0] << "\t" << amp_current_readings[0] << 
       "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
-      "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << endl;
+      "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << 
+      "\nRope out and slack:\t" << rope_out << "\t" << up_slack <<  
+      endl;
 }
 
 // The main program!
