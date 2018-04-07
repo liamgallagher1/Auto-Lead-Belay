@@ -59,16 +59,19 @@ static int ADC_MOSI = 26;
 static int ADC_CLK = 5;
   
 // Encoders
-// small motor encoder
+// Small motor encoder
 static int ENCODER_1_A = 16;
 static int ENCODER_1_B = 12;
 static int ENCODER_1_X = 7;
 static int ENCODER_1_CPR = 8192;
-// big motor encoder
+static int ENCODER_1_FLIP_DIR = -1;
+
+// Big motor encoder
 static int ENCODER_2_A = 8;
 static int ENCODER_2_B = 25;
 static int ENCODER_2_X = 24;
 static int ENCODER_2_CPR = 8192;
+static int ENCODER_2_FLIP_DIR = -1;
 
 // Learned amplification constants
 static double LIN_ACT_AMP = 4.5458; 
@@ -81,6 +84,19 @@ static double MOTOR_1_NO_CURRENT_V = 1.7225;
 static double UP_RADIUS = 0.060217658443764;
 static double SPOOL_R0 =  0.185789405425864;
 static double SPOOL_A = -5.492535985428214E-6;
+
+// Control constants
+// Pull in all the slack every 10 seconds
+static double SLACK_PULLIN_FREQ = 0.1;
+// Pull it in for two seconds
+static double SLACK_PULLIN_TIME = 2.5;
+// Ramp up the upper pulley duty cycle at this rate
+static double SLACK_PULLIN_DC_PER_SEC = 1.0;
+// Up to thie value
+static double SLACK_PULLIN_MAX_DC = 1.0;
+// And then throttle the duty cycle back down over this time
+static double SLACK_PULLIN_WAIT_TIME = 0.25;
+// And then its safe to say, zero the slack count
 
 // Dynamic Global Variables. I regret their existance. 
 
@@ -100,7 +116,7 @@ double up_slack = 0.0;
 // Previous encoder counts to calculate the delta on the rope out
 double prev_sm_theta = 0;
 double prev_rope_out = 0;
-bool pulling_in_slack = false;
+bool is_pulling_in_slack = false;
 
 // Dynamic Variables
 //Encoder 1
@@ -141,7 +157,11 @@ struct timespec curr_time;
 // Time to start next loop. Always add to it the proper number of nanoseconds.
 struct timespec next_loop_time;  
 
-
+// Control information
+long init_pullin_count = 0;
+long pullin_freq_iters = 0;
+long pullin_duration_iters = 0;
+long pullin_rest_iters = 0;
 
 int inner_loop(void);
 int init_motors(void);
@@ -254,7 +274,16 @@ int init(void)
 
   adc_loop_freq_iters = static_cast<long>(
       round(1.0 / (ADC_FREQ_HZ * loop_wait_time_sec)));
- 
+
+  pullin_freq_iters = static_cast<long>(
+      round(1.0 / (SLACK_PULLIN_FREQ * loop_wait_time_sec)));
+  pullin_duration_iters = static_cast<long>(
+      round(SLACK_PULLIN_TIME / loop_wait_time_sec));
+  pullin_rest_iters = static_cast<long>(
+      round(SLACK_PULLIN_WAIT_TIME / loop_wait_time_sec));
+  
+
+
   cout << "Sampling freq HZ and period nsec: " <<
     SAMPLING_FREQ_HZ << "\t"  << loop_wait_time_nsec << endl;
   cout << "Print freq HZ and num iters: " << 
@@ -288,6 +317,8 @@ void print_state(void)
       "\nSmall Motor:\t" << raw_current_readings[1] << "\t" << amp_current_readings[1] << 
       "\nlarge motor:\t" << raw_current_readings[2] << "\t" << amp_current_readings[2] << 
       "\nRope out and slack:\t" << rope_out << "\t" << up_slack <<  
+      "\nPWMs:\t" << pwm_commands[0] << "\t" << pwm_commands[1] << "\t" << pwm_commands[2] << 
+      "\npulling in slack?:\t" << is_pulling_in_slack <<
       endl;
 }
 
@@ -302,14 +333,36 @@ int main_loop(void)
     current_calculations(channel_0, channel_1, 
         raw_current_readings, amp_current_readings, use_amp_readings);
   }
+  
+  update_slack_count();
+  
   // TODO velocity estimation
   // Set pwms
-  
+
+  // If its time to pullin rope, get on it
+  if ((num_iters % pullin_freq_iters) == 0) {
+    is_pulling_in_slack = true;
+    init_pullin_count = num_iters;
+  } 
+  if (is_pulling_in_slack) {
+    // If we are done pulling in slack, call it a day there
+    bool done_with_pullin;
+    float up_dc;
+    clear_slack(up_dc, done_with_pullin);
+    if (done_with_pullin) {
+      is_pulling_in_slack = false;
+    } 
+    // Cancles command otherwise
+    set_sm_dc(up_dc);
+  }
+  //else {
+  // Do some control shit here I guess.
+  //}
+
       // Print if its time to do so
   if ((num_iters % print_loop_freq_iters) == 0) {
     print_state();
   }
-
 
   // Log if needed
   if (make_log) add_loop_state(history);
@@ -415,7 +468,7 @@ void current_calculations(
   double sm_amp_a = sm_fixed_amped_v * VNH5019_V_TO_A;  
   raw_current_out[1] = sm_raw_a;
   amplified_current_out[1] = sm_amp_a;
-  use_amped_est[1] = sm_amp_v < 3.0 && sm_raw_v < 0.5;
+  use_amped_est[1] = 0; // sm_amp_v < 3.0 && sm_raw_v < 0.5;
 
 
   // Large Motor Calculations
@@ -555,8 +608,8 @@ void init_exit_handler(void)
 // Logic at the bottom
 void update_slack_count(void)
 {
-  sm_theta = 2 * M_PI * sm_encoder_count / ENCODER_1_CPR;
-  lm_theta = 2 * M_PI * lm_encoder_count / ENCODER_2_CPR;
+  sm_theta = ENCODER_1_FLIP_DIR * 2 * M_PI * sm_encoder_count / ENCODER_1_CPR;
+  lm_theta = ENCODER_2_FLIP_DIR * 2 * M_PI * lm_encoder_count / ENCODER_2_CPR;
 
   // Modeled the spool as having a decreasing radius over time
   rope_out = SPOOL_R0 / SPOOL_A * (1.0 - exp(-1 * SPOOL_A * lm_theta));
@@ -570,10 +623,33 @@ void update_slack_count(void)
   double slack_delta = spool_rope_delta - up_rope_delta;
  
   // Update slack measurement;
+  //up_slack += max(0.0, slack_delta);
+  // Don't use max so we can track this during open loop pull throughs if it goes negative.
   up_slack += slack_delta;
 
   prev_rope_out = rope_out;
   prev_sm_theta = sm_theta;
 }
 
+void clear_slack(float& dc, bool& done_with_pullin)
+{
+  int counts_into_pullin = num_iters - init_pullin_count + 1;
+  // Its time to be done  
+  if (counts_into_pullin % (pullin_duration_iters + pullin_rest_iters) == 0) {
+    done_with_pullin = true;
+    dc = 0.0;
+    return;
+  }
+  done_with_pullin = false;
+  double secs_in = 1.0E-9 * counts_into_pullin * loop_wait_time_nsec; 
+  if (secs_in < SLACK_PULLIN_TIME) {
+    // pull rope in at an increasing rate
+    dc = min(SLACK_PULLIN_MAX_DC, secs_in * SLACK_PULLIN_DC_PER_SEC);
+  } else {
+    // decrease it again
+    secs_in = secs_in - SLACK_PULLIN_TIME;
+    dc = SLACK_PULLIN_MAX_DC * (1 - secs_in / SLACK_PULLIN_WAIT_TIME);
+  }
+  done_with_pullin = false;
+}
 
