@@ -22,7 +22,7 @@ using namespace std;
 static int SAMPLING_FREQ_HZ = 1000; 
 static int ADC_FREQ_HZ = 1000; // must be less than or equal
 static int PRINT_FREQ_HZ = 5;
-static int RUN_FOR_TIME_SEC = 120;
+static int RUN_FOR_TIME_SEC = 200;
 static int CLK_MICROS = 1; // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
   
   // The big motor
@@ -84,7 +84,8 @@ static double MOTOR_1_AMP  = 3.3686;
 static double MOTOR_1_NO_CURRENT_V = 1.7225; 
 
 // Rope amount constants
-static double UP_RADIUS = 0.060217658443764;
+//static double UP_RADIUS = 0.060217658443764;
+static double UP_RADIUS =  0.051987911789783;
 static double SPOOL_R0 =  0.185789405425864;
 static double SPOOL_A = -5.492535985428214E-6;
 
@@ -106,19 +107,24 @@ static double SLACK_PULLIN_WAIT_TIME = 0.25;
 
 #define VEL_ESTIMATOR_ORDER 12
 static double vel_estimator_b[VEL_ESTIMATOR_ORDER] = {
-0.44208645453822,   1.38909532117318,   2.87691408194143,   3.889125113741699,
-3.51644741566978,   1.42261659560292,  -1.42261659560293,  -3.516447415669782,
--3.88912511374170,  -2.87691408194142,  -1.38909532117317,  -0.442086454538223};
-  
+// 0.44208645453822,   1.38909532117318,   2.87691408194143,   3.889125113741699,
+// 3.51644741566978,   1.42261659560292,  -1.42261659560293,  -3.516447415669782,
+// -3.88912511374170,  -2.87691408194142,  -1.38909532117317,  -0.442086454538223};
+3.74303762587910E-12,
+  3.36873386329119E-11, 1.31006316905768E-10, 2.80727821940932E-10, 3.36873386329119E-10,
+  1.57207580286922E-10, -1.57207580286922E-10, -3.36873386329119E-10, -2.80727821940932E-10, -1.31006316905768E-10, -3.36873386329119E-11, -3.74303762587910E-12};
+
 static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = { 
-1.00000000000000,  -3.17982272939940,   5.61340285861649,  -6.315411849080975,
-4.98086610070146,  -2.76846489658377,   1.07782232448954,  -0.271450917539567,
-0.03497430111834,   0.00140921627291,  -0.00114069211714,   0.000118263210588};
+// 1.00000000000000,  -3.17982272939940,   5.61340285861649,  -6.315411849080975,
+// 4.98086610070146,  -2.76846489658377,   1.07782232448954,  -0.271450917539567,
+// 0.03497430111834,   0.00140921627291,  -0.00114069211714,   0.000118263210588};
+  1, -9.42402952073286, 39.8287330059886, -99.2573021975836, 
+  161.123954282587, -177.228962136889, 132.614858857290, -65.3412606795305, 
+  19.1361903441139, -2.22680164996029, -0.318010723235478, 0.0926304179541074  
+};
 
 static double SPOOL_K_1 =   16.985738033472792; 
-
 static double SPOOL_K_2 = 2.694911533586805;
-
 
 static double NOMINAL_ROPE_SLACK = 0.25;
 static double FRICTION_OFFSET_V =  -0.598923724595684; // Acounts for columb friction
@@ -135,7 +141,7 @@ double sm_theta = 0.0;
 double lm_theta = 0.0;
 
 // Calculated from sm_theta [m]
-double rope_out = NOMINAL_ROPE_SLACK; //0.0;
+double rope_out = 0.0; // NOMINAL_ROPE_SLACK; //0.0;
 // Amount of slack between the upper pulley and main spool
 double up_slack = 0.0;
 // Previous encoder counts to calculate the delta on the rope out
@@ -645,15 +651,18 @@ void add_loop_state(vector<LoopState>& history)
   ls.sm_count = sm_encoder_count;
   ls.lm_count = lm_encoder_count;
  
-  ls.sm_pos_r = -1;
-  ls.sm_vel_est_rs = -1;
+  ls.sm_pos_r = sm_theta;
+  ls.sm_vel_est_rs = up_omega;
 
-  ls.lm_pos_r = -1;
-  ls.lm_vel_est_rs = -1;
+  ls.lm_pos_r = lm_theta;
+  ls.lm_vel_est_rs = spool_omega;
   // Duty cycles in percents
   ls.la_duty_cycle = pwm_commands[0];
   ls.sm_duty_cycle = pwm_commands[1];
   ls.lm_duty_cycle = pwm_commands[2];
+
+  ls.rope_out = rope_out;
+  ls.slack_out = up_slack;
 
   history.push_back(ls);
 }

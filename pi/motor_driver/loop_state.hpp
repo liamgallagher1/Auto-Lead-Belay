@@ -40,7 +40,6 @@ typedef struct LoopState {
   double sm_pos_r;
   double sm_vel_est_rs;
 
-
   double lm_pos_r;
   double lm_vel_est_rs;
 
@@ -48,6 +47,9 @@ typedef struct LoopState {
   float la_duty_cycle;
   float sm_duty_cycle;
   float lm_duty_cycle;
+
+  double rope_out;
+  double slack_out;
 
 } LoopState;
 

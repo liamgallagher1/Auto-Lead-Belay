@@ -29,7 +29,7 @@ void write_loops_to_file(
   output_file << "Time s, time ns, loop count, la_raw_adc, la_amp_adc, " << 
     "sm_raw_adc, sm_amp_adc, lm_raw_adc, lm_amp_adc, la_current, sm_current, " <<
     "lm_current, sm_count, lm_count, sm_pos_r, sm_vel_est_rs, lm_pos_r, " <<
-    "lm_vel_est_rs, la_duty_cycle, sm_duty_cycle, lm_duty_cycle\n";
+    "lm_vel_est_rs, la_duty_cycle, sm_duty_cycle, lm_duty_cycle, rope out, slack out\n";
 
   for (unsigned int i = 0; i < history.size(); ++i) {
     LoopState now = history[i];
@@ -40,7 +40,8 @@ void write_loops_to_file(
       now.la_current << ", " << now.sm_current << ", " << 
       now.lm_current << ", " << now.sm_count << ", " << now.lm_count << ", " << 
       now.sm_pos_r << ", " << now.sm_vel_est_rs << ", " << now.la_duty_cycle << ", " << 
-      now.sm_duty_cycle << ", " << now.lm_duty_cycle << "\n";
+      now.sm_duty_cycle << ", " << now.lm_duty_cycle << ", " << 
+      now.rope_out << "," << "\n";
   }
   
   output_file.close();
