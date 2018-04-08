@@ -91,13 +91,13 @@ static double SPOOL_A =    -9.645565676206025E-6;
 
 // Control constants
 // Pull in all the slack every 10 seconds
-static double SLACK_PULLIN_FREQ = 0.1;
+static double SLACK_PULLIN_FREQ = 1.0 / 13;
 // Pull it in for two seconds
 static double SLACK_PULLIN_TIME = 1;
 // Ramp up the upper pulley duty cycle at this rate
-static double SLACK_PULLIN_DC_PER_SEC = 1.0;
+static double SLACK_PULLIN_DC_PER_SEC = 2.2;
 // Up to thie value
-static double SLACK_PULLIN_MAX_DC = 0.70;
+static double SLACK_PULLIN_MAX_DC = 0.95;
 // And then throttle the duty cycle back down over this time
 static double SLACK_PULLIN_WAIT_TIME = 0.1;
 // And then its safe to say, zero the slack count
