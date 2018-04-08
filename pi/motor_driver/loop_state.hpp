@@ -49,8 +49,11 @@ typedef struct LoopState {
   float lm_duty_cycle;
 
   double rope_out;
-  double slack_out;
-
+  double slack_out; 
+  
+  double error_rad = 0.0;
+  double error_rs = 0.0;
+  
 } LoopState;
 
 

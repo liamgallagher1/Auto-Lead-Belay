@@ -22,7 +22,7 @@ using namespace std;
 static int SAMPLING_FREQ_HZ = 1000; 
 static int ADC_FREQ_HZ = 1000; // must be less than or equal
 static int PRINT_FREQ_HZ = 5;
-static int RUN_FOR_TIME_SEC = 30;
+static int RUN_FOR_TIME_SEC = 90;
 static int CLK_MICROS = 1; // pigpio pwm clk sample rate. 1 microsecond is the highest precision, but uses a whole core
   
   // The big motor
@@ -42,8 +42,8 @@ static int MOTOR_2_FREQ  = 4000;
 static int MOTOR_2_RANGE = 250;
 static int MOTOR_2_MISO = 11;
 static double MOTOR_2_MAX_V = 36.0;
-static double LM_MAX_CURRENT = 6.0;
-static double MOTOR_2_MAX_DC = 0.25;
+static double LM_MAX_CURRENT = 18.0;
+static double MOTOR_2_MAX_DC = 0.50;
 
   // The linear actuator
 static int LIN_ACT_PWM = 22;
@@ -93,13 +93,13 @@ static double SPOOL_A =    -9.645565676206025E-6;
 // Pull in all the slack every 10 seconds
 static double SLACK_PULLIN_FREQ = 0.1;
 // Pull it in for two seconds
-static double SLACK_PULLIN_TIME = 1.5;
+static double SLACK_PULLIN_TIME = 1;
 // Ramp up the upper pulley duty cycle at this rate
 static double SLACK_PULLIN_DC_PER_SEC = 1.0;
 // Up to thie value
-static double SLACK_PULLIN_MAX_DC = 0.80;
+static double SLACK_PULLIN_MAX_DC = 0.70;
 // And then throttle the duty cycle back down over this time
-static double SLACK_PULLIN_WAIT_TIME = 0.15;
+static double SLACK_PULLIN_WAIT_TIME = 0.1;
 // And then its safe to say, zero the slack count
 
 // Velocity filter parameters, numerator and denomenator terms of IIR filter
@@ -126,7 +126,7 @@ static double vel_estimator_a[VEL_ESTIMATOR_ORDER] = {
 static double SPOOL_K_1 = 11.085; 
 static double SPOOL_K_2 = 1.725;
 
-static double NOMINAL_ROPE_SLACK = 0.25;
+static double NOMINAL_ROPE_SLACK = 0.50;
 static double FRICTION_OFFSET_V =  0.3189; //0.598923724595684; // Acounts for columb friction
 
 // Dynamic Global Variables. I regret their existance. 
@@ -148,6 +148,12 @@ double up_slack = NOMINAL_ROPE_SLACK; // 0.0;
 double prev_sm_theta = 0;
 double prev_rope_out = 0;
 bool is_pulling_in_slack = false;
+double theta_to_hold = 0.0;
+
+
+double error_rad = 0.0;
+double error_rs = 0.0;
+
 
 // Dynamic Variables
 //Encoder 1
@@ -160,7 +166,6 @@ int channel_1[3] = {-1, -1, -1};
 double raw_current_readings[3] = {-1.0, -1.0, -1.0};
 double amp_current_readings[3] = {-1.0, -1.0, -1.0};
 bool use_amp_readings[3] = {false, false, false};
-
 
 double pwm_commands[3] = {0.0, 0.0, 0.0};
 // Time that we started the current loop,
@@ -235,7 +240,7 @@ void update_slack_count(void);
 // Outputs true when done
 void clear_slack(double& dc, bool& done_with_pull_in);
 void control_spool(double& dc);
-
+void hold_spool(double& dc); 
 
 // main function
 int init(void);
@@ -384,6 +389,7 @@ int main_loop(void)
   // If its time to pullin rope, get on it
   if ((num_iters % pullin_freq_iters) == 0) {
     is_pulling_in_slack = true;
+    theta_to_hold = lm_theta;
     init_pullin_count = num_iters;
     set_lm_dc(0.0); // Turn it off
   } 
@@ -397,6 +403,10 @@ int main_loop(void)
     } 
     // Cancles command otherwise
     set_sm_dc(up_dc);
+    // Hold the spool in place
+    double lm_dc;
+    hold_spool(lm_dc);
+    set_lm_dc(lm_dc);
   } else {
     double lm_dc;
     control_spool(lm_dc);
@@ -668,6 +678,9 @@ void add_loop_state(vector<LoopState>& history)
   ls.rope_out = rope_out;
   ls.slack_out = up_slack;
 
+  ls.error_rad = error_rad;
+  ls.error_rs = error_rs;
+
   history.push_back(ls);
 }
 
@@ -801,6 +814,37 @@ void control_spool(double& dc)
   // Clamp
   dc = max(min(dc, MOTOR_2_MAX_DC), -1 * MOTOR_2_MAX_DC);
 
+  error_rad = error_spool_rad;
+  error_rs = error_spool_rs;
+
   //
   // U = -K * (x - xdes) + u_ff
+}
+
+void hold_spool(double &dc) 
+{
+  double error_spool_rad =  lm_theta - theta_to_hold; 
+  double error_spool_rs =  spool_omega; 
+  
+  double friction_term = sign(spool_omega) * FRICTION_OFFSET_V; 
+  if (abs(spool_omega) < 0.5) {
+    friction_term = sign(pwm_commands[2]) * FRICTION_OFFSET_V;
+  }
+
+  double v_set = -1 * SPOOL_K_1 * error_spool_rad 
+                  -SPOOL_K_2 * error_spool_rs
+                  - friction_term;
+
+  dc = v_set / MOTOR_2_MAX_V; 
+  if (num_iters % print_loop_freq_iters == 2) {
+    cout << "holding spool: " << error_spool_rad << "\t" << error_spool_rs << endl;
+  }
+
+  //
+  // Clamp
+  dc = max(min(dc, MOTOR_2_MAX_DC), -1 * MOTOR_2_MAX_DC);
+
+  error_rad = error_spool_rad;
+  error_rs = error_spool_rs;
+
 }
