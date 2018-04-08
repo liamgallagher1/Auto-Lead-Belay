@@ -5,19 +5,23 @@ clear;
 
 %%
 M = csvread('logs/sys_test94_3_43.csv', 1, 0);
+%M = csvread('logs/no_drive_log_test_96_16_1.csv', 1, 0);
+rope_length = 60;
 
 time = M(:, 1) + 10^-9 * M(:, 2);
 time = time - time(1);
 up_counts = -1 * M(:, 13);
-spool_counts = M(:, 14);
+spool_counts = 1 * M(:, 14);
 
 CPR = 8196;
 up = up_counts * 2 * pi / CPR;
 spool = spool_counts * 2 * pi / CPR; 
 
-up_radius = 60 / max(up); % 6.02 cm radius
+%up_radius = rope_length / max(up); % 6.02 cm radius
+up_radius = 0.027966354424642;
+
 rope_out = up_radius * up;
-avg_spool_radius = 60 / max(spool); %0.1923
+avg_spool_radius = rope_length / max(spool); %0.1923
 
 
 subplot(2, 1, 1);
@@ -60,6 +64,8 @@ ylim([0, 0.25]);
 %% Test solution
 r0 = radius_fit(1);
 a = radius_fit(2); %* r0;
+
+
 s_theta = r0 / a - r0 /a * exp(-a * spool);
 figure;
 plot(time, rope_out);
@@ -76,4 +82,8 @@ legend('Ground Truth', 'Model');
 %   0.185789405425864
 %a =
 %    -5.492535985428214e-06
+
+% r0 = 0.091241941472015
+% a = -9.645565676206025e-06
+% up_radius = 0.027966354424642
 

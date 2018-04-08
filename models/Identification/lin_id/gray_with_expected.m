@@ -1,6 +1,8 @@
 clear;
 %clean_sys_id;
-load('logs/one_dir_data.mat');
+%load('logs/one_dir_data.mat');
+%load('logs/harder_faster_sigmoid.mat');
+load('logs/more_filtered_sigmoid.mat');
 
 
 % Expected system params
@@ -38,13 +40,15 @@ opt = greyestOptions('InitialState', 'estimate', 'EnforceStability',...
     true, 'Display', 'on');
 est_sys = greyest(data, init_sys);
 
+opt = compareOptions('InitialCondition', 'z');
 compare(data, est_sys, Inf); %, opt);
 
 
 expected_a = [0, 1; 0, a22]; 
 expected_b = [0, 0; b21, b22];
 expected_c = [1, 0;  c2, 0];
-expected_d =  [0, 0; d, 0];
+expected_d =  [0, 0; d21, 0];
 
-save('logs/one_dir_est_sys.mat', 'est_sys');
+%save('logs/one_dir_est_sys.mat', 'est_sys');
+save('logs/sigmoid_sys_est_2.mat', 'est_sys');
 
