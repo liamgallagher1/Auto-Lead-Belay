@@ -7,16 +7,16 @@ sample_freq_hz = 1 / Ts;
 
 % Velocity filter params
 % was 150
-passband_freq_vel_hz = 100;
+passband_freq_vel_hz = 60;
 rel_cutoff_rad_vel = 2 * passband_freq_vel_hz / sample_freq_hz; 
 vel_order = 10;
 stopband_attenuation_vel_db = 100; 
 
 % Acceleration filter params
-passband_freq_accel_hz = 30;
+passband_freq_accel_hz = 40;
 rel_cutoff_rad_accel = 2 * passband_freq_accel_hz / sample_freq_hz; 
 accel_order = 8;
-stopband_attenuation_accel_db = 40; 
+stopband_attenuation_accel_db = 80; 
 
 % First order wide band diff: Al-Alaoui operator
 % appropriate version
@@ -28,11 +28,19 @@ diff_i_ul = 0.3638 * tf([ 1, -1], [1, 1 / 7], Ts);
 
 %% Velocity Filter
 
+vel_pass = 55;
+vel_stop = 100;
 % Velocity Filter
-[b_lp_i, a_lp_i] = cheby2(vel_order, stopband_attenuation_vel_db, rel_cutoff_rad_vel);
+%[b_lp_i, a_lp_i] = cheby2(vel_order, stopband_attenuation_vel_db, rel_cutoff_rad_vel);
+%[n,Wn] = buttord([1000 2000]/5000,[500 2500]/5000,1,60)
+Wp = 2 * vel_pass / sample_freq_hz;      
+Ws = 2 * vel_stop / sample_freq_hz;
+Rp = 3;
+Rs = 80;
+[N, Wn] = buttord(Wp, Ws, Rp, Rs);
+[b_lp_i, a_lp_i] = butter(vel_order,  Wn);
 
-% plot velocity filter
-freqz(b_lp_i, a_lp_i);
+% plot velocity filterfreqz(b_lp_i, a_lp_i);
 title('Low-Pass Filter for Velocity');
 figure;
 
@@ -51,6 +59,9 @@ diff_d = c2d(diff_c, Ts, 'tustin');
 [b_diff, a_diff] = tfdata(diff_d);
 
 [b_filt_vel_i, a_filt_vel_i] = tfdata(diff_filter_i);
+sys = tf(b_filt_vel_i{1}, a_filt_vel_i{1}, Ts);
+[z, p, k] = zpkdata(sys);
+
 [b_filt_i_ul, a_filt_i_ul] = tfdata(diff_filter_i_ul);
 
 
@@ -194,3 +205,6 @@ legend('Acceleration Estimator');
 
 figure;
 test_lowpass_twice_diff;
+
+
+save('filter_3.mat', 'b_filt_vel_i', 'a_filt_vel_i');
